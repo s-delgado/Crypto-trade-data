@@ -1,2 +1,6 @@
 python-binance
+bitmex
 pandas
+tqdm
+sqlalchemy
+psycopg2
