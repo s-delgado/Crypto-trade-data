@@ -4,3 +4,5 @@ pandas
 tqdm
 sqlalchemy
 psycopg2
+matplotlib
+scikit-learn
