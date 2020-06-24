@@ -20,7 +20,7 @@ parameters = {
     "epsilon": [0.001, 0.0001, 1e-5],
     "kernel": ["rbf"],
     "C": [100, 500, 1000],
-    "gamma": [1e-6, 1e-5, 1e-4, 1e-3]
+    "gamma": [0.0001]
     }
 
 # Pre-process data and add technical indicators
@@ -30,6 +30,7 @@ original = original[original.timestamp >= '2019-01-01']
 original.set_index('timestamp', inplace=True)
 
 df = get_candles(original, candle_freq)
+df = df.dropna()
 
 
 # Features
@@ -46,16 +47,16 @@ scaler = MinMaxScaler((-1, 1))
 scaler.fit(df)
 cols = df.columns
 arr = scaler.transform(df)
-df = pd.DataFrame(arr, columns=cols, index=ix)
+scaled_df = pd.DataFrame(arr, columns=cols, index=ix)
 
 # Targets: Min/Max price in n-1 days in the future a total of n days
-df['yH'] = df.Close.shift(-n+1).rolling(n, min_periods=n).max()
-df['yL'] = df.Close.shift(-n+1).rolling(n, min_periods=n).min()
+scaled_df['yH'] = scaled_df.Close.shift(-n+1).rolling(n, min_periods=n).max()
+scaled_df['yL'] = scaled_df.Close.shift(-n+1).rolling(n, min_periods=n).min()
 
 
 # Create clean DF with only the Features and the targets
-df = df.dropna()
-X = df[['yL', 'yH', 'Close', 'ATR', 'MA', 'RSI', 'ROC', 'STOK', 'STOD']].copy()
+scaled_df = scaled_df.dropna()
+X = scaled_df[['yL', 'yH', 'Close', 'ATR', 'MA', 'RSI', 'ROC', 'STOK', 'STOD']].copy()
 
 # Set n and create training examples for SVM: Each training example n past days including the current one.
 lags = n
@@ -74,6 +75,9 @@ splits = get_splits(train_size, test_size, X)
 
 resultH = pd.DataFrame()
 resultL = pd.DataFrame()
+
+predictionsH = pd.DataFrame()
+predictionsL = pd.DataFrame()
 
 for key, val in splits.items():
     X_train, X_test = X.iloc[val['train'], :], X.iloc[val['test'], :]
@@ -98,25 +102,47 @@ for key, val in splits.items():
     r['MSE'] = mean_squared_error(yL_test, yhatL)
     resultL = pd.concat([resultL, r])
 
-    # Record optimal parameter results
+    # Save predictions
+    predictionsH = pd.concat([predictionsH, pd.DataFrame(yhatH, columns=['yhat'], index=X_test.index)])
+    predictionsL = pd.concat([predictionsL, pd.DataFrame(yhatL, columns=['yhat'], index=X_test.index)])
 
+    # print(mean_squared_error(yH_test, yhatH))
+    # print(mean_squared_error(yL_test, yhatL))
+
+    # plt_df = X_test.copy()
+    # plt_df['yhatH'] = yhatH
+    # plt_df['yhatL'] = yhatL
     #
-    print(mean_squared_error(yH_test, yhatH))
-    print(mean_squared_error(yL_test, yhatL))
+    # fig, (ax1) = plt.subplots(1, 1, sharex=True)
+    # ax1.plot(plt_df.yhatH.shift(n//2), label='High')
+    # ax1.plot(plt_df.yhatL.shift(n//2), label='Low')
+    # ax1.plot(plt_df.Close, color='k', label='Close')
+    # # ax2.plot(plt_df.RSI)
+    # plt.legend()
+    # plt.show()
 
-    plt_df = X_test.copy()
-    plt_df['yhatH'] = yhatH
-    plt_df['yhatL'] = yhatL
+    # if key == 19:
+    #     break
 
-    fig, (ax1) = plt.subplots(1, 1, sharex=True)
-    ax1.plot(plt_df.yhatH.shift(n//2), label='High')
-    ax1.plot(plt_df.yhatL.shift(n//2), label='Low')
-    ax1.plot(plt_df.Close, color='k', label='Close')
-    # ax2.plot(plt_df.RSI)
-    plt.legend()
-    plt.show()
 
-    if key == 4:
-        break
 
+
+# Before saving unscale values
+df['yhatH'] = predictionsH
+df['yhatL'] = predictionsL
+
+
+
+descaler = MinMaxScaler((-1,1))
+arr = np.array([[scaler.data_max_[3], scaler.data_max_[3]], [scaler.data_min_[3], scaler.data_min_[3]]])
+arr = pd.DataFrame(arr, columns=['yhatH', 'yhatL'])
+descaler.fit(arr)
+df[['yhatH', 'yhatL']] = descaler.inverse_transform(df[['yhatH', 'yhatL']])
+
+plt.figure()
+plt.plot(df.Close)
+plt.plot(df.yhatH)
+plt.plot(df.yhatL)
+
+df[['Open', 'High', 'Low', 'Close', 'Volume', 'yhatH', 'yhatL']].to_csv('candles_svm.csv')
 

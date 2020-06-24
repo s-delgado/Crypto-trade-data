@@ -1,5 +1,6 @@
 import pandas as pd
-
+import backtrader.feeds as btfeeds
+from datetime import datetime
 
 def get_candles(DF, freq):
     df = DF.copy()
@@ -28,4 +29,23 @@ def get_splits(train_size, test_size, df):
         if len(ixs[s]['test']) == 0:
             ixs.pop(s)
     return ixs
+
+
+class GenericCSV_SVM(btfeeds.GenericCSVData):
+
+    lines = ('svmHigh', 'svmLow')
+    # add date filter
+
+    params = (('dtformat', '%Y-%m-%d %H:%M:%S'),
+              ('fromdate', datetime(2019, 1, 1)),
+              ('todate', datetime(2019, 1, 31)),
+              ('datetime', 0),
+              ('high', 1),
+              ('low', 2),
+              ('open', 3),
+              ('close', 4),
+              ('volume', 5),
+              ('svmHigh', 6),
+              ('svmLow', 7),
+              ('openinterest', -1))
 
