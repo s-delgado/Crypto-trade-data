@@ -2,13 +2,39 @@ import backtrader as bt
 from utils import GenericCSV_SVM
 
 
+class svmH(bt.Indicator):
+
+    lines = ('svmHigh',)
+
+    params = (('lag', -12),)
+
+    plotinfo = dict(plot=True, subplot=False)
+
+    def __init__(self):
+        lagged = self.data.lines.svmHigh(1)
+        self.lines.svmHigh = bt.indicators.Highest(lagged, period=24)
+
+
+class svmL(bt.Indicator):
+
+    lines = ('svmLow',)
+
+    params = (('lag', -12),)
+
+    plotinfo = dict(plot=True, subplot=False)
+
+    def __init__(self):
+        lagged = self.data.lines.svmLow(1)
+        self.lines.svmLow = bt.indicators.Lowest(lagged, period=24)
+
+
 # Create a Stratey
 class SVMStrategy(bt.Strategy):
     # params = (('ewmperiod', 15),)
 
     def log(self, txt, dt=None):
         ''' Logging function fot this strategy'''
-        dt = dt or self.datas[0].datetime.date(0)
+        dt = dt or self.datas[0].datetime.datetime(0)
         print('%s, %s' % (dt.isoformat(), txt))
 
     def __init__(self):
@@ -20,9 +46,8 @@ class SVMStrategy(bt.Strategy):
         self.buyprice = None
         self.buycomm = None
 
-        # Need an indicator the shows the lagged values
-
-        self.ma = bt.indicators.Lowest(self.data.lines.svmHigh, period=12, plot=True, subplot=False)
+        self.svmH = svmH()
+        self.svmL = svmL()
 
 
     def notify_order(self, order):
@@ -65,7 +90,9 @@ class SVMStrategy(bt.Strategy):
 
     def next(self):
         # Simply log the closing price of the series from the reference
-        self.log('Close, %.2f' % self.dataclose[0])
+        self.log('Close: %.2f, svmH: %.2f, svmL: %.2f' % (self.dataclose[0], self.svmH[0], self.svmL[0]))
+        # self.log('' % self.svmH[0])
+        # self.log('' % self.svmL[0])
 
         # Check if an order is pending ... if yes, we cannot send a 2nd one
         if self.order:
@@ -74,23 +101,21 @@ class SVMStrategy(bt.Strategy):
         # Check if we are in the market
         if not self.position:
 
-            # Not yet ... we MIGHT BUY if ...
-            if self.dataclose[0] > self.ma:
-
-                # BUY, BUY, BUY!!! (with all possible default parameters)
+            if self.dataclose[0] > self.svmH:
                 self.log('BUY CREATE, %.2f' % self.dataclose[0])
-
-                # Keep track of the created order to avoid a 2nd order
                 self.order = self.buy()
 
-        else:
-
-            if self.dataclose[0] < self.ma:
-                # SELL, SELL, SELL!!! (with all possible default parameters)
+            if self.dataclose[0] < self.svmL:
                 self.log('SELL CREATE, %.2f' % self.dataclose[0])
-
-                # Keep track of the created order to avoid a 2nd order
                 self.order = self.sell()
+
+        if self.position.size == 1 and self.dataclose[0] < self.svmL:
+            self.order = self.sell(size=2)
+
+
+        elif self.position.size == -1 and self.dataclose[0] > self.svmH:
+            self.order = self.buy(size=2)
+
 
 
 

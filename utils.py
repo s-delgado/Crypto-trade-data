@@ -1,6 +1,7 @@
 import pandas as pd
 import backtrader.feeds as btfeeds
 from datetime import datetime
+import backtrader as bt
 
 def get_candles(DF, freq):
     df = DF.copy()
@@ -37,8 +38,10 @@ class GenericCSV_SVM(btfeeds.GenericCSVData):
     # add date filter
 
     params = (('dtformat', '%Y-%m-%d %H:%M:%S'),
+              ('timeframe', bt.TimeFrame.Minutes),
+              ('compression', 5),
               ('fromdate', datetime(2019, 1, 1)),
-              ('todate', datetime(2019, 1, 31)),
+              ('todate', datetime(2019, 1, 15)),
               ('datetime', 0),
               ('high', 1),
               ('low', 2),
