@@ -3,6 +3,7 @@ import backtrader.feeds as btfeeds
 from datetime import datetime
 import backtrader as bt
 
+
 def get_candles(DF, freq):
     df = DF.copy()
     groups = df.groupby(pd.Grouper(freq=freq))
@@ -40,8 +41,8 @@ class GenericCSV_SVM(btfeeds.GenericCSVData):
     params = (('dtformat', '%Y-%m-%d %H:%M:%S'),
               ('timeframe', bt.TimeFrame.Minutes),
               ('compression', 5),
-              ('fromdate', datetime(2019, 1, 1)),
-              ('todate', datetime(2019, 1, 15)),
+              ('fromdate', datetime(2020, 1, 1)),
+              ('todate', datetime(2020, 1, 31)),
               ('datetime', 0),
               ('high', 1),
               ('low', 2),

@@ -7,3 +7,5 @@ psycopg2
 matplotlib
 scikit-learn
 backtrader
+TA-Lib
+statsmodels

@@ -63,3 +63,5 @@ def STO(df, n):
     """
     SOk = STOK(df)
     return pd.Series(SOk.ewm(span=n, min_periods=n - 1).mean(), name='SO%d_' + str(n))
+
+
