@@ -10,8 +10,8 @@ from utils import get_splits, get_candles
 from talib.abstract import OBV, WILLR
 
 # Set parameters
-candle_freq = '5min'  # Aggregation time for candles
-base_k = int((60*2)/5)  # Look back window for technical indicators
+candle_freq = '15min'  # Aggregation time for candles
+base_k = int((60*6)/15)  # Look back window for technical indicators
 n = base_k  # Forecasting window for SVM's
 train_size = 1000
 test_size = 288
@@ -150,5 +150,5 @@ df[['yhatH', 'yhatL']] = descaler.inverse_transform(df[['yhatH', 'yhatL']])
 # plt.plot(df.yhatH)
 # plt.plot(df.yhatL)
 #
-df[['Open', 'High', 'Low', 'Close', 'Volume', 'yhatH', 'yhatL']].dropna().to_csv('candles_svm.csv')
+df[['Open', 'High', 'Low', 'Close', 'Volume', 'yhatH', 'yhatL']].dropna().to_csv('candles_svm'+candle_freq+'.csv')
 #

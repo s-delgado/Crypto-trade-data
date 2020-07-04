@@ -142,7 +142,7 @@ class SVMStrategy(bt.Strategy):
         self.buyprice = None
         self.buycomm = None
 
-        self.svmH = bt.indicators.MovingAverageSimple(svmH())
+        self.svmH = svmH()
         self.svmL = svmL()
 
 
@@ -213,27 +213,27 @@ class SVMStrategy(bt.Strategy):
             ):
                 self.order = self.buy(size=1)
                 self.trail_price = self.order.created.price
-                self.highside = self.sell(size=1, exectype=bt.Order.StopTrail, trailpercent=0.02)
+                self.highside = self.sell(size=1, exectype=bt.Order.StopTrail, trailpercent=0.05)
                 self.log('BUY CREATE, %.2f, TRAIL PRICE %.2f' % (self.dataclose[0], self.trail_price))
 
-            # if (self.EMA[0] < self.EMA[-1]
-            #         and self.EMA[0] < self.svmL #* (1 - 0.005)
-            #         and self.OLS < -3):
+            # if (self.dataclose[0] < self.dataclose[-1]
+            #         and self.dataclose[0] < self.svmH * 0.99
+            #         and self.Slope < -60
+            #         and self.RSI <= 30
+            # ):
             #     self.order = self.sell(size=1)
             #     self.trail_price = self.order.created.price
             #     self.highside = self.buy(size=1, exectype=bt.Order.StopTrail, trailpercent=0.02)
-            #     self.log('SELL CREATE, %.2f, TRAIL PRICE %.2f' % (self.dataclose[0], self.trail_price))
+            #     self.log('BUY CREATE, %.2f, TRAIL PRICE %.2f' % (self.dataclose[0], self.trail_price))
 
         if self.position.size > 0:
             if self.dataclose[0] < self.svmH:
                 self.cancel(self.highside)
-                # self.cancel(self.lowside)
                 self.order = self.sell(size=1)
 
         # if self.position.size < 0:
-        #     if self.dataclose[0] >= self.svmL:
+        #     if self.dataclose[0] > self.svmL:
         #         self.cancel(self.highside)
-        #         # self.cancel(self.lowside)
         #         self.order = self.buy(size=1)
 
 
@@ -262,7 +262,7 @@ if __name__ == '__main__':
 
     cerebro.addstrategy(SVMStrategy)
 
-    data = GenericCSV_SVM(dataname='candles_svm.csv')
+    data = GenericCSV_SVM(dataname='candles_svm15min.csv')
 
     cerebro.adddata(data)
 

@@ -40,9 +40,9 @@ class GenericCSV_SVM(btfeeds.GenericCSVData):
 
     params = (('dtformat', '%Y-%m-%d %H:%M:%S'),
               ('timeframe', bt.TimeFrame.Minutes),
-              ('compression', 5),
+              ('compression', 15),
               ('fromdate', datetime(2020, 1, 1)),
-              ('todate', datetime(2020, 1, 31)),
+              ('todate', datetime(2020, 6, 30)),
               ('datetime', 0),
               ('high', 1),
               ('low', 2),
