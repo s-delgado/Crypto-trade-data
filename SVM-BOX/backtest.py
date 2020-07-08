@@ -216,21 +216,24 @@ class SVMStrategy(bt.Strategy):
                 self.highside = self.sell(size=1, exectype=bt.Order.StopTrail, trailpercent=0.05)
                 self.log('BUY CREATE, %.2f, TRAIL PRICE %.2f' % (self.dataclose[0], self.trail_price))
 
-            # if (self.dataclose[0] < self.dataclose[-1]
-            #         and self.dataclose[0] < self.svmH * 0.99
-            #         and self.Slope < -60
-            #         and self.RSI <= 30
-            # ):
-            #     self.order = self.sell(size=1)
-            #     self.trail_price = self.order.created.price
-            #     self.highside = self.buy(size=1, exectype=bt.Order.StopTrail, trailpercent=0.02)
-            #     self.log('BUY CREATE, %.2f, TRAIL PRICE %.2f' % (self.dataclose[0], self.trail_price))
+            if self.position.size > 0:
+                if self.dataclose[0] < self.svmH:
+                    self.cancel(self.highside)
+                    self.order = self.sell(size=1)
 
-        if self.position.size > 0:
-            if self.dataclose[0] < self.svmH:
-                self.cancel(self.highside)
-                self.order = self.sell(size=1)
-
+        #     if (self.dataclose[0] < self.dataclose[-1]
+        #             # and self.dataclose[-1] < self.svmL * 0.99
+        #             and self.dataclose[0] < self.svmL * 0.95
+        #             and self.Slope < -80
+        #             and self.RSI <= 30
+        #     ):
+        #         self.order = self.sell(size=1)
+        #         self.trail_price = self.order.created.price
+        #         self.highside = self.buy(size=1, exectype=bt.Order.StopTrail, trailpercent=0.05)
+        #         self.log('BUY CREATE, %.2f, TRAIL PRICE %.2f' % (self.dataclose[0], self.trail_price))
+        #
+        #
+        #
         # if self.position.size < 0:
         #     if self.dataclose[0] > self.svmL:
         #         self.cancel(self.highside)

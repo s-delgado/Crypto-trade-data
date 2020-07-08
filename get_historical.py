@@ -7,15 +7,15 @@ from binance.client import Client
 from datetime import timedelta, datetime
 from dateutil import parser
 from bitmex import bitmex
-from keys import binance_api_key, binance_secret_key, bitmex_api_key, bitmex_secret_key
+from keys import keys
 from tqdm import tqdm
 
 
 # CONSTANTS
 binsizes = {"1m": 1, "5m": 5, "1h": 60, "1d": 1440}
 batch_size = 750
-bitmex_client = bitmex(test=False, api_key=bitmex_api_key, api_secret=bitmex_secret_key)
-binance_client = Client(api_key=binance_api_key, api_secret=binance_secret_key)
+bitmex_client = bitmex(test=False, api_key=keys['bitmex']['apiKey'], api_secret=keys['bitmex']['secret'])
+binance_client = Client(api_key=keys['binance']['apiKey'], api_secret=keys['binance']['secret'])
 
 
 # FUNCTIONS
@@ -34,7 +34,7 @@ def minutes_of_new_data(symbol, kline_size, data, source):
 
 
 def get_all_binance(symbol, kline_size, save = False):
-    filename = '%s-%s-data.csv' % (symbol, kline_size)
+    filename = 'data/candles/%s-%s-data.csv.zip' % (symbol, kline_size)
     if os.path.isfile(filename):
         data_df = pd.read_csv(filename)
     else:
@@ -86,4 +86,16 @@ def get_all_bitmex(symbol, kline_size, save = False):
     return data_df
 
 
-data = get_all_binance('BTCUSDT', '1m', save=True)
+
+tickers = binance_client.get_all_tickers()
+
+symbols = []
+wanted = ['EUR', 'USD', 'BTC', 'ETH', 'USDT']
+for t in tickers:
+    symbol = t['symbol']
+    if any(w in symbol for w in wanted):
+        symbols.append(symbol)
+
+
+for symbol in symbols:
+    get_all_binance(symbol, '1m', save=True)

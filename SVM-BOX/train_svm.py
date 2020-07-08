@@ -1,5 +1,4 @@
 import pandas as pd
-from matplotlib import pyplot as plt
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 from sklearn import svm

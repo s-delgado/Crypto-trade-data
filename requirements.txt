@@ -9,3 +9,4 @@ scikit-learn
 backtrader
 TA-Lib
 statsmodels
+ccxt
