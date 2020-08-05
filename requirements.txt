@@ -10,3 +10,4 @@ backtrader
 TA-Lib
 statsmodels
 ccxt
+pyrenko
