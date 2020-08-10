@@ -19,35 +19,26 @@ class shiftedrenko:
 
     def __renko_rule(self, last_price):
         # Get the gap between two prices
-        gap_shift = int(float(last_price - self.renko_prices[-1]) / self.shift_size)
-        gap_reverse = int(float(last_price - self.renko_prices[-1]) / (self.shift_size + self.brick_size))
+        gap_shift = 0
+        brick_ceiling = self.renko_prices[-1]
+        brick_floor = self.renko_prices[-1] - self.brick_size
+
+        if last_price > brick_ceiling:
+            gap_shift = int(float(last_price - brick_ceiling) / self.shift_size)
+        elif last_price < brick_floor:
+            gap_shift = int(float(last_price - brick_floor) / self.shift_size)
+
         start_brick = 0
         num_new_bars = 0
 
         # When we have some gap in prices
         if gap_shift != 0:
-            # Forward any direction (up or down)
-            if (gap_shift > 0 and (self.renko_directions[-1] > 0 or self.renko_directions[-1] == 0)) or (
-                    gap_shift < 0 and (self.renko_directions[-1] < 0 or self.renko_directions[-1] == 0)):
-                num_new_bars = gap_shift
-
-                for d in range(start_brick, np.abs(gap_shift)):
-                    self.renko_prices.append(self.renko_prices[-1] + self.shift_size * np.sign(gap_shift))
-                    self.renko_directions.append(np.sign(gap_shift))
-
-        # Backward direction (up -> down or down -> up)
-        if gap_reverse != 0 and np.sign(self.renko_directions[-1]) != np.sign(gap_reverse):
-            num_new_bars = gap_shift + self.brick_size * (-1 * np.sign(gap_reverse))
-            # num_new_bars -= np.sign(gap_shift)
-            # start_brick = 2
-
-            # self.renko_prices.append(self.renko_prices[-1] + self.shift_size * np.sign(gap_reverse))
-            # self.renko_directions.append(np.sign(gap_reverse))
+            num_new_bars = np.abs(gap_shift)
 
             # Add each brick
-            for d in range(start_brick, np.abs(num_new_bars)):
-                self.renko_prices.append(self.renko_prices[-1] + self.shift_size * np.sign(gap_reverse))
-                self.renko_directions.append(np.sign(gap_reverse))
+            for d in range(start_brick, num_new_bars):
+                self.renko_prices.append(self.renko_prices[-1] + self.shift_size * np.sign(gap_shift))
+                self.renko_directions.append(np.sign(gap_shift))
 
         return num_new_bars
 
@@ -137,7 +128,7 @@ class shiftedrenko:
             # Set basic params for patch rectangle
             col = col_up if self.renko_directions[i] == 1 else col_down
             x = i
-            y = self.renko_prices[i] - self.brick_size #if self.renko_directions[i] == 1 else self.renko_prices[i]
+            y = self.renko_prices[i] - self.brick_size
             height = self.brick_size
 
             # Draw bar with params

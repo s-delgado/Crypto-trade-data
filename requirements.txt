@@ -1,4 +1,4 @@
-python-binance
+git+git://github.com/s-delgado/python-binance.git
 bitmex
 pandas
 tqdm

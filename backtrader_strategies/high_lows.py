@@ -1,6 +1,5 @@
 import backtrader as bt
-from svm_box_functions.utils import GenericCSV_SVM
-from indicators import Slope, BollingerBands
+from archive.svm_box_functions.utils import GenericCSV_SVM
 
 """
 First try for this strategy.
@@ -48,8 +47,8 @@ class HL_Strategy(bt.Strategy):
         # self.ADX = bt.indicators.DirectionalIndicator()
         # self.bband = BollingerBands(period=n, devfactor=2)
         # self.slope = Slope()
-        # self.slow = bt.indicators.ExponentialMovingAverage(period=64*4)
-        # self.fast = bt.indicators.ExponentialMovingAverage(period=64)
+        self.slow = bt.indicators.ExponentialMovingAverage(period=64*4)
+        self.fast = bt.indicators.ExponentialMovingAverage(period=64)
 
         # self.avg = self.highs + self.lows
 
@@ -114,17 +113,17 @@ class HL_Strategy(bt.Strategy):
         #     # Keep track of the created order to avoid a 2nd order
         #     self.order = self.buy()
 
-        # if not self.position:
-        #
-        #     if self.fast > self.slow and self.fast[-1] <= self.slow[-1]:
-        #         self.order = self.buy()
-        #         # self.end_trade = self.sell(size=1, exectype=bt.Order.StopTrail, trailpercent=0.05)
-        #         self.log('BUY CREATE, %.2f' % self.order.created.price)
-        #
-        #     if self.fast < self.slow and self.fast[-1] >= self.slow[-1]:
-        #         self.order = self.sell()
-        #         # self.end_trade = self.buy(size=1, exectype=bt.Order.StopTrail, trailpercent=0.05)
-        #         self.log('SELL CREATE, %.2f' % self.order.created.price)
+        if not self.position:
+
+            if self.fast > self.slow and self.fast[-1] <= self.slow[-1]:
+                self.order = self.buy()
+                # self.end_trade = self.sell(size=1, exectype=bt.Order.StopTrail, trailpercent=0.05)
+                self.log('BUY CREATE, %.2f' % self.order.created.price)
+
+            if self.fast < self.slow and self.fast[-1] >= self.slow[-1]:
+                self.order = self.sell()
+                # self.end_trade = self.buy(size=1, exectype=bt.Order.StopTrail, trailpercent=0.05)
+                self.log('SELL CREATE, %.2f' % self.order.created.price)
 
         # if self.dataclose > self.bband.lines.top * 1.01 and not self.position:
         #     # BUY, BUY, BUY!!! (with all possible default parameters)
@@ -157,15 +156,15 @@ class HL_Strategy(bt.Strategy):
             #     self.end_trade = self.buy(size=1, exectype=bt.Order.StopTrail, trailpercent=0.05)
             #     self.log('SELL CREATE, %.2f, TRAIL PRICE %.2f' % (self.dataclose[0], self.trail_price))
 
-        # if self.position.size > 0:
-        #     if self.fast < self.slow:
-        #         # self.cancel(self.end_trade)
-        #         self.order = self.sell(size=1)
-        #
-        # if self.position.size < 0:
-        #     if self.fast > self.slow:
-        #         # self.cancel(self.end_trade)
-        #         self.order = self.buy(size=1)
+        if self.position.size > 0:
+            if self.fast < self.slow:
+                # self.cancel(self.end_trade)
+                self.order = self.sell(size=2)
+
+        if self.position.size < 0:
+            if self.fast > self.slow:
+                # self.cancel(self.end_trade)
+                self.order = self.buy(size=2)
 
 
 
@@ -179,11 +178,12 @@ if __name__ == '__main__':
     cerebro = bt.Cerebro()
 
     cerebro.addstrategy(HL_Strategy)
-
-    data = GenericCSV_SVM(dataname='data/candles_svm15min.csv')
+    # df = pd.read_csv('data/candles/BTCUSDT-1m-futures-data.csv.zip')
+    # df.to_csv('data/candles/BTCUSDT-1m-futures-data.csv', index=False)
+    data = GenericCSV_SVM(dataname='data/candles/BTCUSDT-1m-futures-data.csv')
 
     # Convert to Renko
-    data.addfilter(bt.filters.Renko, size=1, align=10)
+    # data.addfilter(bt.filters.Renko, size=1, align=10)
     cerebro.adddata(data)
 
 
