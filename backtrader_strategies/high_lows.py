@@ -1,5 +1,6 @@
 import backtrader as bt
 from archive.svm_box_functions.utils import GenericCSV_SVM
+import pandas as pd
 
 """
 First try for this strategy.
@@ -178,12 +179,12 @@ if __name__ == '__main__':
     cerebro = bt.Cerebro()
 
     cerebro.addstrategy(HL_Strategy)
-    # df = pd.read_csv('data/candles/BTCUSDT-1m-futures-data.csv.zip')
-    # df.to_csv('data/candles/BTCUSDT-1m-futures-data.csv', index=False)
+    df = pd.read_csv('data/candles/BTCUSDT-1m-futures-data.csv.zip')
+    df.to_csv('data/candles/BTCUSDT-1m-futures-data.csv', index=False)
     data = GenericCSV_SVM(dataname='data/candles/BTCUSDT-1m-futures-data.csv')
 
     # Convert to Renko
-    # data.addfilter(bt.filters.Renko, size=1, align=10)
+    data.addfilter(bt.filters.Renko, size=1, align=10)
     cerebro.adddata(data)
 
 

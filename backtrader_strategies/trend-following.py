@@ -1,10 +1,13 @@
 import backtrader as bt
-from backtrader_functions import GenericCSV
+from backtrader_functions import GenericCSV, EWMAC, PriceChange
 
 
 # Create a Stratey
 class TrendStrategy(bt.Strategy):
-    # params = (('ewmperiod', 15),)
+    params = (('slow_period', 16),
+              ('fast_period', 16*4),
+              ('std_lookback', 25),
+              ('ewm_std', False))
 
     def log(self, txt, dt=None):
         ''' Logging function fot this strategy'''
@@ -20,8 +23,32 @@ class TrendStrategy(bt.Strategy):
         self.start_trade = None
         self.end_trade = None
 
-        self.slow = bt.indicators.ExponentialMovingAverage(period=64 * 4)
-        self.fast = bt.indicators.ExponentialMovingAverage(period=64)
+        # self.slow = bt.indicators.ExponentialMovingAverage(period=8*4)
+        # self.fast = bt.indicators.ExponentialMovingAverage(period=8)
+        # self.price = bt.indicators.ExponentialMovingAverage(period=1, subplot=True)
+        # self.slow, self.fast, self.crossover, self.std, self.forecast = EWMAC()
+        # ewmac = EWMAC(subplot=False)
+        # self.slow = bt.LinePlotterIndicator(ewmac.slow, name='slow', plot=True)
+        # self.std = bt.LinePlotterIndicator(ewmac.std, name='std', subplot=True)
+        # self.crossover = bt.LinePlotterIndicator(ewmac.crossover, name='crossover', subplot=True)
+        # self.forecast = bt.LinePlotterIndicator(ewmac.forecast, name='forecast', subplot=True)
+        # bt.indicators.PercentChange
+
+        self.slow = bt.indicators.ExponentialMovingAverage(period=self.params.slow_period)
+        self.fast = bt.indicators.ExponentialMovingAverage(period=self.params.fast_period)
+        crossover = self.fast - self.slow
+        self.crossover = bt.LinePlotterIndicator(crossover, name='crossover', subplot=True)
+        returns = PriceChange(period=1)
+        if self.params.ewm_std:
+            self.std = bt.indicators.StandardDeviation(returns, period=self.params.std_lookback,
+                                                       movav=bt.indicators.ExponentialMovingAverage, subplot=True)
+        else:
+            self.std = bt.indicators.StandardDeviation(returns, period=self.params.std_lookback, subplot=True)
+
+        forecast = crossover / self.std
+        self.forecast = bt.LinePlotterIndicator(forecast, name='forecast', subplot=True)
+
+
 
     def notify_order(self, order):
         if order.status in [order.Submitted, order.Accepted]:
@@ -62,36 +89,64 @@ class TrendStrategy(bt.Strategy):
                  (trade.pnl, trade.pnlcomm))
 
     def next(self):
+        pass
         # Simply log the closing price of the series from the reference
-        self.log('Position: %.0f, Close: %.2f' % (self.position.size, self.dataclose[0]))
+        # self.log('Position: %.0f, Close: %.2f, Fast: %.2f, Slow: %.2f' % (self.position.size,
+        #                                                                   self.dataclose[0],
+        #                                                                   self.fast[0],
+        #                                                                   self.slow[0]))
 
-        # Check if an order is pending ... if yes, we cannot send a 2nd one
-        if not self.position:
+        # EMWA
+        # if not self.position:
+        #
+        #     if self.fast > self.slow and self.fast[-1] <= self.slow[-1]:
+        #         self.order = self.buy()
+        #         self.log('BUY CREATE, %.2f' % self.order.created.price)
+        #
+        #     if self.fast < self.slow and self.fast[-1] >= self.slow[-1]:
+        #         self.order = self.sell()
+        #         self.log('SELL CREATE, %.2f' % self.order.created.price)
+        #
+        # if self.position.size > 0:
+        #     if self.fast < self.slow:
+        #         self.order = self.sell(size=2)
+        #
+        # if self.position.size < 0:
+        #     if self.fast > self.slow:
+        #         self.order = self.buy(size=2)
 
-            if self.fast > self.slow and self.fast[-1] <= self.slow[-1]:
-                self.order = self.buy()
-                self.log('BUY CREATE, %.2f' % self.order.created.price)
-
-            if self.fast < self.slow and self.fast[-1] >= self.slow[-1]:
-                self.order = self.sell()
-                self.log('SELL CREATE, %.2f' % self.order.created.price)
-
-        if self.position.size > 0:
-            if self.fast < self.slow:
-                self.order = self.sell(size=2)
-
-        if self.position.size < 0:
-            if self.fast > self.slow:
-                self.order = self.buy(size=2)
+        # Renko
+        # if not self.position:
+        #
+        #     if self.dataclose[0] > self.dataclose[-1] > self.dataclose[-2]:
+        #         self.order = self.buy()
+        #         self.log('BUY CREATE, %.2f' % self.order.created.price)
+        #
+        #     if self.dataclose[0] < self.dataclose[-1] < self.dataclose[-2]:
+        #         self.order = self.sell()
+        #         self.log('SELL CREATE, %.2f' % self.order.created.price)
+        #
+        # if self.position.size > 0:
+        #     if self.dataclose[0] < self.dataclose[-1]:
+        #         self.order = self.sell(size=1)
+        #
+        # if self.position.size < 0:
+        #     if self.dataclose[0] > self.dataclose[-1]:
+        #         self.order = self.buy(size=1)
 
 
 if __name__ == '__main__':
     cerebro = bt.Cerebro()
 
     cerebro.addstrategy(TrendStrategy)
-    data = GenericCSV(dataname='data/BTCUSDT.csv')
+    data0 = GenericCSV(dataname='data/BTCUSDT-truncated.csv')
+    # data0.addfilter(bt.filters.Renko, size=100, align=100)
+    # cerebro.adddata(data0)
+    cerebro.resampledata(data0, timeframe=bt.TimeFrame.Minutes, compression=60)
 
-    cerebro.adddata(data)
+    # data.addfilter(bt.filters.Renko, size=10, align=10)
+    # cerebro.adddata(data)
+
 
     cerebro.broker.set_cash(100000)
     cerebro.broker.setcommission(commission=0.04 / 100)
