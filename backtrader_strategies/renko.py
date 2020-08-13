@@ -1,15 +1,15 @@
 import backtrader as bt
-from backtrader_functions import GenericCSV, EWMAC
+from backtrader_functions import GenericCSV, EWMAC, PriceChange
 import pandas as pd
 import numpy as np
 
 
 # Create a Stratey
-class TrendStrategy(bt.Strategy):
+class Renko(bt.Strategy):
 
-    params = (
-              ('fast_period', 2),
-              ('vol_lookback', 36),
+    params = (('slow_period', 128*4),
+              ('fast_period', 128),
+              ('std_lookback', 36),
               ('ewm_std', True))
 
     def log(self, txt, dt=None):
@@ -27,14 +27,21 @@ class TrendStrategy(bt.Strategy):
         self.start_trade = None
         self.end_trade = None
 
-        self.scale = True
+        self.slow = bt.indicators.ExponentialMovingAverage(period=self.params.slow_period)
+        self.fast = bt.indicators.ExponentialMovingAverage(period=self.params.fast_period)
+        # crossover = self.fast - self.slow
+        # self.crossover = bt.LinePlotterIndicator(crossover, name='crossover', subplot=False)
+        # returns = PriceChange(period=1, plot=False)
+        # if self.params.ewm_std:
+        #     self.std = bt.indicators.StandardDeviation(returns, period=self.params.std_lookback,
+        #                                                movav=bt.indicators.ExponentialMovingAverage, subplot=True)
+        # else:
+        #     self.std = bt.indicators.StandardDeviation(returns, period=self.params.std_lookback, subplot=True)
+        #
+        # forecast = (crossover / self.std) * 8.4
+        # self.forecast = bt.LinePlotterIndicator(forecast, name='forecast', subplot=True)
+        self.forecast = EWMAC(plot=True, slow_period=self.p.slow_period, fast_period=self.p.fast_period)
 
-        self.forecasts = [EWMAC(plot=True,
-                                fast_period=self.p.fast_period ** x,
-                                slow_period=self.p.fast_period ** x * 4,
-                                vol_lookback=self.p.vol_lookback,
-                                scale=self.scale
-                                ) for x in range(1, 7)]
 
     def notify_order(self, order):
         if order.status in [order.Submitted, order.Accepted]:
@@ -92,71 +99,34 @@ class TrendStrategy(bt.Strategy):
         #                       columns=['timestamp', 'position', 'close', 'fast', 'slow', 'forecast'])
         #
         # self.record = self.record.append(record)
-        # EMWA
-        # if not self.position:
-        #
-        #     if self.fast > self.slow and self.fast[-1] <= self.slow[-1]:
-        #         self.order = self.buy()
-        #         self.log('BUY CREATE, %.2f' % self.order.created.price)
-        #
-        #     if self.fast < self.slow and self.fast[-1] >= self.slow[-1]:
-        #         self.order = self.sell()
-        #         self.log('SELL CREATE, %.2f' % self.order.created.price)
-        #
-        # if self.position.size > 0:
-        #     if self.fast < self.slow:
-        #         self.order = self.sell(size=2)
-        #
-        # if self.position.size < 0:
-        #     if self.fast > self.slow:
-        #         self.order = self.buy(size=2)
+        EMWA
+        if not self.position:
 
+            if self.fast > self.slow and self.fast[-1] <= self.slow[-1]:
+                self.order = self.buy()
+                self.log('BUY CREATE, %.2f' % self.order.created.price)
 
-class TrendStrategyNoScale(TrendStrategy):
-    def __init__(self):
-        # Keep a reference to the "close" line in the data[0] dataseries
-        self.dataclose = self.datas[0].close
+            if self.fast < self.slow and self.fast[-1] >= self.slow[-1]:
+                self.order = self.sell()
+                self.log('SELL CREATE, %.2f' % self.order.created.price)
 
-        # To keep track of pending orders and buy price/commission
-        self.order = None
-        self.start_trade = None
-        self.end_trade = None
+        if self.position.size > 0:
+            if self.fast < self.slow:
+                self.order = self.sell(size=2)
 
-        self.scale = False
+        if self.position.size < 0:
+            if self.fast > self.slow:
+                self.order = self.buy(size=2)
 
-        self.forecasts = [EWMAC(plot=True,
-                                fast_period=self.p.fast_period ** x,
-                                slow_period=self.p.fast_period ** x * 4,
-                                vol_lookback=self.p.vol_lookback,
-                                scale=self.scale
-                                ) for x in range(1, 7)]
-
-
-def get_forecast_scalars():
-    cerebro = bt.Cerebro()
-    cerebro.addstrategy(TrendStrategyNoScale)
-    data0 = GenericCSV(dataname='data/BTCUSDT-truncated.csv')
-    cerebro.resampledata(data0, timeframe=bt.TimeFrame.Minutes, compression=60)
-    thestrats = cerebro.run(tradehistory=True)
-    thestrat = thestrats[0]
-    forecasts = thestrat.forecasts
-    string = ''
-    for f in forecasts:
-        fast_period = f.params.fast_period
-        scalar = round(10 / np.nanmean(f.array), 2)
-        string = string + 'l%.0f_%.0f=%.2f, ' % (fast_period, fast_period*4, scalar)
-
-    print(string[:-2])
-
-# get_forecast_scalars()
 
 if __name__ == '__main__':
     cerebro = bt.Cerebro()
 
-    cerebro.addstrategy(TrendStrategy)
-    data0 = GenericCSV(dataname='data/BTCUSDT.csv')
-    cerebro.resampledata(data0, timeframe=bt.TimeFrame.Minutes, compression=60)
-
+    cerebro.addstrategy(Renko)
+    data0 = GenericCSV(dataname='data/BTCUSDT-truncated.csv')
+    data0.addfilter(bt.filters.Renko, size=15, align=10)
+    # cerebro.resampledata(data0, timeframe=bt.TimeFrame.Minutes, compression=60)
+    cerebro.adddata(data0)
     cerebro.broker.set_cash(100000)
     cerebro.broker.setcommission(commission=0.04 / 100)
     # cerebro.addwriter(bt.WriterFile, csv=True, out='logs.csv')
@@ -169,8 +139,8 @@ if __name__ == '__main__':
 
     # Print out the final result
     print('Final Portfolio Value: %.2f' % cerebro.broker.getvalue())
-    # print(10 / np.nanmean(cerebro.runningstrats[0].forecast.array))
+    print(10 / np.nanmean(cerebro.runningstrats[0].forecast.array))
 
-    cerebro.plot()
+    cerebro.plot(style='candles')
 
 
