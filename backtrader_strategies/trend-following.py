@@ -1,7 +1,9 @@
 import backtrader as bt
-from backtrader_functions import GenericCSV, EWMAC
+from backtrader_functions import EWMAC
 import pandas as pd
 import numpy as np
+from functions import get_candles, load_csv_candles, emwac
+import math
 
 
 # Create a Stratey
@@ -33,7 +35,8 @@ class TrendStrategy(bt.Strategy):
                                 fast_period=self.p.fast_period ** x,
                                 slow_period=self.p.fast_period ** x * 4,
                                 vol_lookback=self.p.vol_lookback,
-                                scale=self.scale
+                                scale=self.scale,
+                                scalars=scalars
                                 ) for x in range(1, 7)]
 
     def notify_order(self, order):
@@ -75,7 +78,7 @@ class TrendStrategy(bt.Strategy):
                  (trade.pnl, trade.pnlcomm))
 
     def next(self):
-        pass
+        # pass
         # Simply log the closing price of the series from the reference
         # self.log('Position: %.0f, Close: %.2f, Fast: %.2f, Slow: %.2f, Forecast: %.2f' % (self.position.size,
         #                                                                                   self.dataclose[0],
@@ -83,82 +86,64 @@ class TrendStrategy(bt.Strategy):
         #                                                                                   self.slow[0],
         #                                                                                   self.forecast[0],
         #                                                                                      ))
-        # record = pd.DataFrame(np.array([[self.data.datetime.datetime(),
-        #                                  self.position.size,
-        #                                  self.dataclose[0],
-        #                                  self.fast[0],
-        #                                  self.slow[0],
-        #                                  self.forecast[0]]]),
-        #                       columns=['timestamp', 'position', 'close', 'fast', 'slow', 'forecast'])
-        #
-        # self.record = self.record.append(record)
-        # EMWA
-        # if not self.position:
-        #
-        #     if self.fast > self.slow and self.fast[-1] <= self.slow[-1]:
-        #         self.order = self.buy()
-        #         self.log('BUY CREATE, %.2f' % self.order.created.price)
-        #
-        #     if self.fast < self.slow and self.fast[-1] >= self.slow[-1]:
-        #         self.order = self.sell()
-        #         self.log('SELL CREATE, %.2f' % self.order.created.price)
-        #
-        # if self.position.size > 0:
-        #     if self.fast < self.slow:
-        #         self.order = self.sell(size=2)
-        #
-        # if self.position.size < 0:
-        #     if self.fast > self.slow:
-        #         self.order = self.buy(size=2)
+
+        f = 3
+        if not self.position:
 
 
-class TrendStrategyNoScale(TrendStrategy):
-    def __init__(self):
-        # Keep a reference to the "close" line in the data[0] dataseries
-        self.dataclose = self.datas[0].close
+            if self.forecasts[f][0] == 20:
+                self.order = self.buy()
+                self.log('BUY CREATE, %.2f' % self.order.created.price)
 
-        # To keep track of pending orders and buy price/commission
-        self.order = None
-        self.start_trade = None
-        self.end_trade = None
+            if self.forecasts[f][0]  == -20:
+                self.order = self.sell()
+                self.log('SELL CREATE, %.2f' % self.order.created.price)
 
-        self.scale = False
+        if self.position.size > 0:
+            if self.forecasts[f][0] < 20:
+                self.order = self.sell(size=1)
 
-        self.forecasts = [EWMAC(plot=True,
-                                fast_period=self.p.fast_period ** x,
-                                slow_period=self.p.fast_period ** x * 4,
-                                vol_lookback=self.p.vol_lookback,
-                                scale=self.scale
-                                ) for x in range(1, 7)]
+        if self.position.size < 0:
+            if self.forecasts[f][0] > -20:
+                self.order = self.buy(size=1)
 
-
-def get_forecast_scalars():
-    cerebro = bt.Cerebro()
-    cerebro.addstrategy(TrendStrategyNoScale)
-    data0 = GenericCSV(dataname='data/BTCUSDT-truncated.csv')
-    cerebro.resampledata(data0, timeframe=bt.TimeFrame.Minutes, compression=60)
-    thestrats = cerebro.run(tradehistory=True)
-    thestrat = thestrats[0]
-    forecasts = thestrat.forecasts
-    string = ''
-    for f in forecasts:
-        fast_period = f.params.fast_period
-        scalar = round(10 / np.nanmean(f.array), 2)
-        string = string + 'l%.0f_%.0f=%.2f, ' % (fast_period, fast_period*4, scalar)
-
-    print(string[:-2])
-
-# get_forecast_scalars()
 
 if __name__ == '__main__':
-    cerebro = bt.Cerebro()
+    # Prepare data
+    filename = 'data/BTCUSDT-truncated.csv'
+    df = load_csv_candles(filename)
+    df = get_candles(df, 'H')
 
+    # Calculate forecast scalars
+    emwa_periods = [2 ** x for x in range(1, 7)]
+    scalars = dict()
+    forecasts = pd.DataFrame()
+    for fp in emwa_periods:
+        forecast = emwac(df, fast_period=fp, vol_lookback=36)
+        forecasts[fp] = forecast
+        scalar = 10 / np.nanmean(forecast)
+        scalars['l%.0f_%.0f' % (fp, 4*fp)] = round(scalar, 2)
+    print(scalars)
+    print(forecasts.corr())
+
+    # Get standardized cost
+    commission = 0.04 / 100
+    min_contract_size = 0.001
+    df['block_value'] = min_contract_size * df.close * (1/100)
+    df['hourly_price_vol'] = df.close.pct_change().ewm(span=36).std()
+    df['instrument_currency_volatility'] = df.block_value * df.hourly_price_vol
+    df['annualized_icv'] = math.sqrt(365*24) * df.instrument_currency_volatility
+    df['trade_cost'] = min_contract_size * df.close * commission
+    df['sr_cost'] = 2*df.trade_cost / df.annualized_icv
+
+    # Cerebro
+    cerebro = bt.Cerebro(tradehistory=True)
     cerebro.addstrategy(TrendStrategy)
-    data0 = GenericCSV(dataname='data/BTCUSDT.csv')
-    cerebro.resampledata(data0, timeframe=bt.TimeFrame.Minutes, compression=60)
 
+    data = bt.feeds.PandasData(dataname=df, timeframe=bt.TimeFrame.Minutes, compression=60)
+    cerebro.adddata(data)
     cerebro.broker.set_cash(100000)
-    cerebro.broker.setcommission(commission=0.04 / 100)
+    cerebro.broker.setcommission(commission=commission)
     # cerebro.addwriter(bt.WriterFile, csv=True, out='logs.csv')
 
     # Print out the starting conditions
@@ -169,7 +154,6 @@ if __name__ == '__main__':
 
     # Print out the final result
     print('Final Portfolio Value: %.2f' % cerebro.broker.getvalue())
-    # print(10 / np.nanmean(cerebro.runningstrats[0].forecast.array))
 
     cerebro.plot()
 

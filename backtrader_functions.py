@@ -46,28 +46,22 @@ class Cap(bt.Indicator):
 
     params = (('capmin', -20), ('capmax', 20))
 
-    def once(self, start, end):
-        array = self.lines.capped.array
-
-        for i in range(start, end):
-            if self.data[0] < self.p.capmin:
-                array[i] = self.p.capmin
-            elif self.data[0] > self.p.capmax:
-                array[i] = self.p.capmax
-            else:
-                array[i] = self.data[0]
+    def next(self):
+        if self.data[0] < self.p.capmin:
+            self.lines.capped[0] = self.p.capmin
+        elif self.data[0] > self.p.capmax:
+            self.lines.capped[0] = self.p.capmax
+        else:
+            self.lines.capped[0] = self.data[0]
 
 
-
-
-def ewmac_forecast_scalar(Lfast, Lslow):
+def ewmac_forecast_scalar(Lfast, Lslow, fsdict):
     """
     Function to return the forecast scalar (table 49 of the book)
 
     Only defined for certain values
     """
 
-    fsdict = dict(l2_8=56.48, l4_16=29.09, l8_32=15.20, l16_64=8.41, l32_128=4.31, l64_256=2.27)
     lkey = "l%d_%d" % (Lfast, Lslow)
 
     if lkey in fsdict:
@@ -75,9 +69,6 @@ def ewmac_forecast_scalar(Lfast, Lslow):
     else:
         print("Warning: No scalar defined for Lfast=%d, Lslow=%d, using default of 1.0" % (Lfast, Lslow))
         return 1.0
-
-
-
 
 
 class EWMAC(bt.Indicator):
@@ -90,7 +81,8 @@ class EWMAC(bt.Indicator):
               ('ewm_std', True),
               ('scale', True))
 
-    def __init__(self):
+    def __init__(self, scalars):
+        self.scalars = scalars
         slow = bt.indicators.ExponentialMovingAverage(period=self.p.slow_period)
         fast = bt.indicators.ExponentialMovingAverage(period=self.p.fast_period)
         crossover = fast - slow
@@ -103,9 +95,9 @@ class EWMAC(bt.Indicator):
             stdev_returns = bt.indicators.StandardDeviation(returns, period=self.p.vol_lookback, subplot=True)
 
         if self.p.scale:
-            f_scalar = ewmac_forecast_scalar(self.p.fast_period, self.p.slow_period)
+            f_scalar = ewmac_forecast_scalar(self.p.fast_period, self.p.slow_period, self.scalars)
             forecast = (crossover / stdev_returns) * f_scalar
-            # cap_forecast = Cap(forecast)
+            forecast = Cap(forecast)
         else:
             forecast = (crossover / stdev_returns)
 
