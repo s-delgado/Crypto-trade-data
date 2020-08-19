@@ -1,5 +1,5 @@
 import backtrader as bt
-from backtrader_functions import EWMAC
+from backtrader_functions import EWMAC, Cap
 import pandas as pd
 import numpy as np
 from functions import get_candles, load_csv_candles, emwac
@@ -37,7 +37,11 @@ class TrendStrategy(bt.Strategy):
                                 vol_lookback=self.p.vol_lookback,
                                 scale=self.scale,
                                 scalars=scalars
-                                ) for x in range(1, 7)]
+                                ) for x in range(2, 5)]
+
+        cforecast = self.forecasts[0] * fw[0, 0] + self.forecasts[1] * fw[0, 1] + self.forecasts[2] * fw[0, 2]
+        self.cforecast = Cap(cforecast * fdm)
+        # bt.LinePlotterIndicator(self.cforecast, name='Combined Forecast')
 
     def notify_order(self, order):
         if order.status in [order.Submitted, order.Accepted]:
@@ -78,44 +82,43 @@ class TrendStrategy(bt.Strategy):
                  (trade.pnl, trade.pnlcomm))
 
     def next(self):
+        f = 0
         # pass
         # Simply log the closing price of the series from the reference
-        # self.log('Position: %.0f, Close: %.2f, Fast: %.2f, Slow: %.2f, Forecast: %.2f' % (self.position.size,
-        #                                                                                   self.dataclose[0],
-        #                                                                                   self.fast[0],
-        #                                                                                   self.slow[0],
-        #                                                                                   self.forecast[0],
-        #                                                                                      ))
+        self.log('Position: %.0f, Close: %.2f, Forecast: %.2f' % (self.position.size,
+                                                                  self.dataclose[0],
+                                                                                          self.forecasts[f][0],
+                                                                                             ))
 
-        f = 3
+
         if not self.position:
 
 
-            if self.forecasts[f][0] == 20:
+            if self.cforecast == 20:
                 self.order = self.buy()
                 self.log('BUY CREATE, %.2f' % self.order.created.price)
 
-            if self.forecasts[f][0]  == -20:
+            if self.cforecast == -20:
                 self.order = self.sell()
                 self.log('SELL CREATE, %.2f' % self.order.created.price)
 
         if self.position.size > 0:
-            if self.forecasts[f][0] < 20:
+            if self.cforecast < 20:
                 self.order = self.sell(size=1)
 
         if self.position.size < 0:
-            if self.forecasts[f][0] > -20:
+            if self.cforecast > -20:
                 self.order = self.buy(size=1)
 
 
 if __name__ == '__main__':
     # Prepare data
-    filename = 'data/BTCUSDT-truncated.csv'
+    filename = 'data/BTCUSDT.csv'
     df = load_csv_candles(filename)
-    df = get_candles(df, 'H')
+    df = get_candles(df, 'D')
 
     # Calculate forecast scalars
-    emwa_periods = [2 ** x for x in range(1, 7)]
+    emwa_periods = [2 ** x for x in range(2, 5)]
     scalars = dict()
     forecasts = pd.DataFrame()
     for fp in emwa_periods:
@@ -124,23 +127,32 @@ if __name__ == '__main__':
         scalar = 10 / np.nanmean(forecast)
         scalars['l%.0f_%.0f' % (fp, 4*fp)] = round(scalar, 2)
     print(scalars)
-    print(forecasts.corr())
+    corr = forecasts.corr()
+    print(corr)
 
     # Get standardized cost
     commission = 0.04 / 100
-    min_contract_size = 0.001
-    df['block_value'] = min_contract_size * df.close * (1/100)
-    df['hourly_price_vol'] = df.close.pct_change().ewm(span=36).std()
-    df['instrument_currency_volatility'] = df.block_value * df.hourly_price_vol
-    df['annualized_icv'] = math.sqrt(365*24) * df.instrument_currency_volatility
-    df['trade_cost'] = min_contract_size * df.close * commission
-    df['sr_cost'] = 2*df.trade_cost / df.annualized_icv
+    # min_contract_size = 0.001
+    # df['block_value'] = min_contract_size * df.close.ewm(span=36, min_periods=36).mean() * (1/100)
+    # df['hourly_price_vol'] = df.close.pct_change().ewm(span=36, min_periods=36).std()
+    # df['instrument_currency_volatility'] = df.block_value * df.hourly_price_vol
+    # df['annualized_icv'] = math.sqrt(365) * df.instrument_currency_volatility
+    # df['trade_cost'] = min_contract_size * df.close.ewm(span=36, min_periods=36).mean()  * commission
+    # df['sr_cost'] = 2 * df.trade_cost / df.annualized_icv
+    # df[['trade_cost', 'annualized_icv', 'sr_cost']].plot()
+    # print(df.sr_cost.mean())
+
+    # Forecast weights
+    fw = np.array([[0.42, 0.16, 0.42]])
+
+    # Forecast diversification multiplier
+    fdm = 1 / math.sqrt(np.matmul(fw, np.matmul(corr.values, fw.T)))
 
     # Cerebro
     cerebro = bt.Cerebro(tradehistory=True)
     cerebro.addstrategy(TrendStrategy)
 
-    data = bt.feeds.PandasData(dataname=df, timeframe=bt.TimeFrame.Minutes, compression=60)
+    data = bt.feeds.PandasData(dataname=df, timeframe=bt.TimeFrame.Days, compression=1)
     cerebro.adddata(data)
     cerebro.broker.set_cash(100000)
     cerebro.broker.setcommission(commission=commission)
