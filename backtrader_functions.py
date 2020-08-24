@@ -3,6 +3,12 @@ from datetime import datetime
 import backtrader as bt
 
 
+class CommInfoFractional(bt.CommissionInfo):
+    def getsize(self, price, cash):
+        '''Returns fractional size for cash operation @price'''
+        return self.p.leverage * (cash / price)
+
+
 class GenericCSV(btfeeds.GenericCSVData):
 
     params = (('dtformat', '%Y-%m-%d %H:%M:%S'),
@@ -102,6 +108,21 @@ class EWMAC(bt.Indicator):
             forecast = (crossover / stdev_returns)
 
         self.l.forecast = forecast
+
+
+class PositionObserver(bt.observer.Observer):
+    lines = ('value',)
+
+    plotinfo = dict(plot=True, subplot=True, plotlinelabels=True)
+
+    # plotlines = dict(
+    #     created=dict(marker='*', markersize=8.0, color='lime', fillstyle='full'),
+    #     expired=dict(marker='s', markersize=8.0, color='red', fillstyle='full')
+    # )
+
+    def next(self):
+        # self.lines.position[0] = self._owner.position.size
+        self.lines.value[0] = self.datas[0].close[0] * self._owner.position.size
 
 
 

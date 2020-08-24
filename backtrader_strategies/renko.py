@@ -40,7 +40,7 @@ class Renko(bt.Strategy):
         #
         # forecast = (crossover / self.std) * 8.4
         # self.forecast = bt.LinePlotterIndicator(forecast, name='forecast', subplot=True)
-        self.forecast = EWMAC(plot=True, slow_period=self.p.slow_period, fast_period=self.p.fast_period)
+        # self.forecast = EWMAC(plot=True, slow_period=self.p.slow_period, fast_period=self.p.fast_period)
 
 
     def notify_order(self, order):
@@ -99,7 +99,7 @@ class Renko(bt.Strategy):
         #                       columns=['timestamp', 'position', 'close', 'fast', 'slow', 'forecast'])
         #
         # self.record = self.record.append(record)
-        EMWA
+
         if not self.position:
 
             if self.fast > self.slow and self.fast[-1] <= self.slow[-1]:
@@ -123,8 +123,8 @@ if __name__ == '__main__':
     cerebro = bt.Cerebro()
 
     cerebro.addstrategy(Renko)
-    data0 = GenericCSV(dataname='data/BTCUSDT-truncated.csv')
-    data0.addfilter(bt.filters.Renko, size=15, align=10)
+    data0 = GenericCSV(dataname='data/BTCUSDT.csv')
+    data0.addfilter(bt.filters.Renko, size=20, align=10)
     # cerebro.resampledata(data0, timeframe=bt.TimeFrame.Minutes, compression=60)
     cerebro.adddata(data0)
     cerebro.broker.set_cash(100000)
@@ -139,7 +139,7 @@ if __name__ == '__main__':
 
     # Print out the final result
     print('Final Portfolio Value: %.2f' % cerebro.broker.getvalue())
-    print(10 / np.nanmean(cerebro.runningstrats[0].forecast.array))
+    # print(10 / np.nanmean(cerebro.runningstrats[0].forecast.array))
 
     cerebro.plot(style='candles')
 
