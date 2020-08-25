@@ -11,7 +11,7 @@ from datetime import datetime
 class TrendStrategy(bt.Strategy):
 
     params = (('fast_period', 2),
-              ('vol_lookback', 35),
+              ('vol_lookback', 35*24),
               ('ewm_std', True))
 
     def log(self, txt, dt=None):
@@ -66,7 +66,7 @@ class TrendStrategy(bt.Strategy):
         if order.status in [order.Completed]:
             if order.isbuy():
                 self.log(
-                    'BUY EXECUTED, Price: %.2f, Cost: %.2f, Comm %.2f' %
+                    'BUY EXECUTED, Price: %.2f, Cost: %.2f, Comm %.6f' %
                     (order.executed.price,
                      order.executed.value,
                      order.executed.comm))
@@ -74,7 +74,7 @@ class TrendStrategy(bt.Strategy):
                 self.buyprice = order.executed.price
                 self.buycomm = order.executed.comm
             else:  # Sell
-                self.log('SELL EXECUTED, Price: %.2f, Cost: %.2f, Comm %.2f' %
+                self.log('SELL EXECUTED, Price: %.2f, Cost: %.2f, Comm %.6f' %
                          (order.executed.price,
                           order.executed.value,
                           order.executed.comm))
@@ -100,7 +100,7 @@ class TrendStrategy(bt.Strategy):
         dt = self.data.datetime.datetime()
         trading_capital = self.stats.broker.value[0]
         annualised_cash_vol_target = pct_volatility_target * trading_capital
-        daily_cash_volatility_target = annualised_cash_vol_target / math.sqrt(365)
+        daily_cash_volatility_target = annualised_cash_vol_target / math.sqrt(365*24)
 
         vol_scalar = daily_cash_volatility_target / self.instrument_currency_volatility[0]
 
@@ -138,7 +138,7 @@ class TrendStrategy(bt.Strategy):
 
 
         if change != 0:
-            if position == 0 or (abs(change / position) > 0.5):  # Position inertia of 10%
+            if position == 0 or (abs(change / position) > 0.1):  # Position inertia of 10%
 
                 self.order = self.order_target_size(target=desired_position)
                 if change > 0:
@@ -152,6 +152,7 @@ if __name__ == '__main__':
     # Prepare data
     filename = 'data/BTCUSDT.csv'
     df = load_csv_candles(filename)
+    df = df[df.index >= '2018-11-01']
     freq = 'H'
     df = get_candles(df, freq).dropna()
 
@@ -166,7 +167,7 @@ if __name__ == '__main__':
     scalars = dict()
     forecasts = pd.DataFrame()
     for fp in emwa_periods:
-        forecast = emwac(df, fast_period=fp, vol_lookback=35)
+        forecast = emwac(df, fast_period=fp, vol_lookback=35*24)
         forecasts[fp] = forecast
         scalar = 10 / np.nanmean(forecast)
         scalars['l%.0f_%.0f' % (fp, 4*fp)] = round(scalar, 2)
@@ -195,8 +196,8 @@ if __name__ == '__main__':
     # Volatility targeting
     pct_volatility_target = 0.10
     initial_trading_capital = 1000
-    annualised_cash_vol_target = pct_volatility_target * initial_trading_capital
-    daily_cash_volatility_target = annualised_cash_vol_target / math.sqrt(365)
+    # annualised_cash_vol_target = pct_volatility_target * initial_trading_capital
+    # daily_cash_volatility_target = annualised_cash_vol_target / math.sqrt(365)
 
 
     # Cerebro
@@ -210,8 +211,8 @@ if __name__ == '__main__':
     cerebro.adddata(data)
 
     cerebro.broker.set_cash(initial_trading_capital)
-    cerebro.broker.setcommission(commission=commission)
-    cerebro.broker.addcommissioninfo(CommInfoFractional())
+    # cerebro.broker.setcommission(commission=commission)
+    cerebro.broker.addcommissioninfo(CommInfoFractional(commission=commission))
 
     cerebro.addobserver(PositionObserver)
     cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='mysharpe')
