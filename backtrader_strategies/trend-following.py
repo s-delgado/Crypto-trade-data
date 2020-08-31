@@ -2,7 +2,7 @@ import backtrader as bt
 from backtrader_functions import EWMAC, Cap, PriceChange, CommInfoFractional, PositionObserver
 import pandas as pd
 import numpy as np
-from functions import get_candles, load_csv_candles, emwac
+from functions import get_candles, load_csv_candles, emwac, get_scalars
 import math
 from datetime import datetime
 
@@ -11,7 +11,7 @@ from datetime import datetime
 class TrendStrategy(bt.Strategy):
 
     params = (('fast_period', 2),
-              ('vol_lookback', 35*24),
+              ('vol_lookback', 35),
               ('ewm_std', True))
 
     def log(self, txt, dt=None):
@@ -42,17 +42,20 @@ class TrendStrategy(bt.Strategy):
         cforecast = self.forecasts[0] * fw[0, 0] + self.forecasts[1] * fw[0, 1] + self.forecasts[2] * fw[0, 2]
         self.cforecast = Cap(cforecast * fdm)
 
-        self.block_value = min_contract_size * self.dataclose * (1/100)
+        self.block_value = self.dataclose * (1/100) * min_contract_size
+        # bt.LinePlotterIndicator(self.block_value, name='block_value')
 
         returns = PriceChange(period=1, plot=False)
-        returnvol = (bt.indicators.StandardDeviation(returns,
-                                                     period=self.p.vol_lookback,
-                                                     movav=bt.indicators.ExponentialMovingAverage,
-                                                     subplot=True))
-        returnvolpct = (returnvol / self.dataclose) * 100
-
-        self.instrument_currency_volatility = returnvolpct * self.block_value
-        bt.LinePlotterIndicator(self.instrument_currency_volatility, name='instrument_currency_volatility')
+        # bt.LinePlotterIndicator(returns, name='returns')
+        returnvol = bt.indicators.StandardDeviation(returns,
+                                                    period=self.p.vol_lookback,
+                                                    movav=bt.indicators.ExponentialMovingAverage,
+                                                    subplot=True)
+        # bt.LinePlotterIndicator(returnvol, name='returnvol')
+        pct_vol = 100 * (returnvol / self.dataclose)
+        bt.LinePlotterIndicator(pct_vol, name='returnvolpct')
+        self.instrument_currency_volatility = pct_vol * self.block_value
+        # bt.LinePlotterIndicator(self.instrument_currency_volatility, name='instrument_currency_volatility')
 
         # annualised_cash_vol_target = pct_volatility_target * self.stats.broker.value
 
@@ -102,13 +105,13 @@ class TrendStrategy(bt.Strategy):
         annualised_cash_vol_target = pct_volatility_target * trading_capital
         daily_cash_volatility_target = annualised_cash_vol_target / math.sqrt(365*24)
 
-        vol_scalar = daily_cash_volatility_target / self.instrument_currency_volatility[0]
+        vol_scalar = (daily_cash_volatility_target / self.instrument_currency_volatility[0])
 
-        position_value = self.dataclose[0] * self.position.size
 
         # Positions in btc
         self.previous_subsystem_position = self.subsystem_position
         self.subsystem_position = round(((self.cforecast[0] * vol_scalar)/10) * min_contract_size, 3)
+        # self.subsystem_position = vol_scalar
 
         # Positions in cryptucurrency
         position = self.position.size
@@ -116,13 +119,18 @@ class TrendStrategy(bt.Strategy):
 
         change = desired_position - position
 
+        position_value = self.dataclose[0] * self.position.size
+
+        if abs(desired_position * self.dataclose[0]) > trading_capital * max_capital_usage:
+            desired_position = round((trading_capital * max_capital_usage * np.sign(desired_position)) / self.dataclose[0], 3)
         # Simply log the closing price of the series from the reference
         txt = []
         txt += [' Position: %.6f' % (position,)]
         txt += [' Subsystem Position: %.6f' % (self.subsystem_position,)]
         txt += [' Close: %.2f' % (self.dataclose[0],)]
         txt += [' Position value: %.2f' % (position_value,)]
-        # txt += [' VolTarget: %.2f' % (daily_cash_volatility_target,)]
+        if position>0:
+            txt += [' change pct: %.2f' % ((change/position)*100,)]
         txt += [' ICV: %.2f' % (self.instrument_currency_volatility[0],)]
         txt += [' vol_scalar: %.2f' % (vol_scalar,)]
         txt += [' Forecast: %.2f' % (self.cforecast[0],)]
@@ -133,12 +141,11 @@ class TrendStrategy(bt.Strategy):
 
         self.log(','.join(txt))
 
-        if dt == datetime(2020,7,27,16,0,0,0) or dt == dt == datetime(2020,7,27,15,0,0,0):
-            print('stop')
-
+        # if dt == datetime(2020,7,27,16,0,0,0) or dt == dt == datetime(2020,7,27,15,0,0,0):
+        #     print('stop')
 
         if change != 0:
-            if position == 0 or (abs(change / position) > 0.1):  # Position inertia of 10%
+            if position == 0 or (abs(change / position) > 0.3):  # Position inertia of 10%
 
                 self.order = self.order_target_size(target=desired_position)
                 if change > 0:
@@ -152,34 +159,40 @@ if __name__ == '__main__':
     # Prepare data
     filename = 'data/BTCUSDT.csv'
     df = load_csv_candles(filename)
-    df = df[df.index >= '2018-11-01']
+    # df = df[df.index >= '2018-01-01']
     freq = 'H'
     df = get_candles(df, freq).dropna()
-
+    # df['close'] = df.close
     # Calculate forecast scalars
     if freq == 'H':
         init_period = 4 # 2**%
     else:
-        init_period = 2
+        init_period = 1
     variations = 3
 
-    emwa_periods = [2 ** x for x in range(init_period, init_period+variations)]
-    scalars = dict()
-    forecasts = pd.DataFrame()
-    for fp in emwa_periods:
-        forecast = emwac(df, fast_period=fp, vol_lookback=35*24)
-        forecasts[fp] = forecast
-        scalar = 10 / np.nanmean(forecast)
-        scalars['l%.0f_%.0f' % (fp, 4*fp)] = round(scalar, 2)
+    scalars, forecasts = get_scalars(df, init_period, variations)
     print(scalars)
     corr = forecasts.corr()
     print(corr)
 
-    # Get standardized cost
+    # Calcs
     commission = 0.04 / 100
     min_contract_size = 0.001
-    # df['block_value'] = min_contract_size * df.close * (1/100)
-    # df['daily_price_vol'] = df.close.diff().ewm(span=36, min_periods=36).std()
+    # df['block_value'] = min_contract_size * df.close * (1 / 100)
+    # df['returnvol'] = df.close.diff().ewm(span=35, min_periods=35).std()
+    # df['pct_vol'] = 100 * (df.returnvol / df.close)
+    # df['icv'] = df.pct_vol * df.block_value
+    # print(df.pct_vol.mean(), df.icv.mean())
+    #
+    # annualised_cash_vol_target = pct_volatility_target * initial_trading_capital
+    # daily_cash_volatility_target = annualised_cash_vol_target / math.sqrt(365 * 24)
+    #
+    # vol_scalar = (daily_cash_volatility_target / df.icv)
+
+    # Positions in btc
+
+    # self.subsystem_position = round(((self.cforecast[0] * vol_scalar) / 10) * min_contract_size, 3)
+
     # df['instrument_currency_volatility'] = df.block_value * (df.daily_price_vol/df.close) * 100
     # df['annualized_icv'] = math.sqrt(365) * df.instrument_currency_volatility
     # df['trade_cost'] = min_contract_size * df.close * commission
@@ -188,14 +201,15 @@ if __name__ == '__main__':
     # print(df.sr_cost.mean())
 
     # Forecast weights
-    fw = np.array([[0.3, 0.2, 0.8]])
+    fw = np.array([[0.42, 0.16, 0.42]])
 
     # Forecast diversification multiplier
     fdm = 1 / math.sqrt(np.matmul(fw, np.matmul(corr.values, fw.T)))
 
     # Volatility targeting
-    pct_volatility_target = 0.10
+    pct_volatility_target = 0.1
     initial_trading_capital = 1000
+    max_capital_usage = 0.5
     # annualised_cash_vol_target = pct_volatility_target * initial_trading_capital
     # daily_cash_volatility_target = annualised_cash_vol_target / math.sqrt(365)
 
