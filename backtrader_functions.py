@@ -1,6 +1,7 @@
 import backtrader.feeds as btfeeds
 from datetime import datetime
 import backtrader as bt
+import numpy as np
 
 
 class CommInfoFractional(bt.CommissionInfo):
@@ -77,6 +78,23 @@ def ewmac_forecast_scalar(Lfast, Lslow, fsdict):
         return 1.0
 
 
+class ForecastScalers(bt.Indicator):
+    alias = ('ArithmeticMean', 'Mean',)
+    lines = ('av',)
+
+    # def next(self):
+    #     if len(self.data.get(size=10)) > 0:
+    #         self.line[0] = math.fsum(self.data.get(size=len(self.data))) / len(self.data)
+
+    def once(self, start, end):
+        src = self.data.array
+        dst = self.line.array
+
+        for i in range(start, end):
+            seg = src[start:i + 1]
+            dst[i] = round(10 / np.nanmedian(np.abs(seg)), 2)
+
+
 class EWMAC(bt.Indicator):
 
     lines = ('forecast',)
@@ -84,21 +102,16 @@ class EWMAC(bt.Indicator):
     params = (('fast_period', 16),
               ('slow_period', 16*4),
               ('vol_lookback', 36),
-              ('ewm_std', True),
               ('scale', True))
 
-    def __init__(self, scalars):
+    def __init__(self, scalars=None):
         self.scalars = scalars
         slow = bt.indicators.ExponentialMovingAverage(period=self.p.slow_period)
         fast = bt.indicators.ExponentialMovingAverage(period=self.p.fast_period)
         crossover = fast - slow
-        # self.crossover = bt.LinePlotterIndicator(crossover, name='crossover', subplot=False)
         returns = PriceChange(period=1, plot=False)
-        if self.params.ewm_std:
-            stdev_returns = bt.indicators.StandardDeviation(returns, period=self.p.vol_lookback,
-                                                            movav=bt.indicators.ExponentialMovingAverage, subplot=True)
-        else:
-            stdev_returns = bt.indicators.StandardDeviation(returns, period=self.p.vol_lookback, subplot=True)
+        stdev_returns = bt.indicators.StandardDeviation(returns, period=self.p.vol_lookback,
+                                                        movav=bt.indicators.ExponentialMovingAverage, subplot=True)
 
         if self.p.scale:
             f_scalar = ewmac_forecast_scalar(self.p.fast_period, self.p.slow_period, self.scalars)
@@ -123,6 +136,10 @@ class PositionObserver(bt.observer.Observer):
     def next(self):
         # self.lines.position[0] = self._owner.position.size
         self.lines.value[0] = self.datas[0].close[0] * self._owner.position.size
+
+
+
+
 
 
 
