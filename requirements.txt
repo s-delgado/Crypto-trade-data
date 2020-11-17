@@ -1,13 +1,5 @@
 git+git://github.com/s-delgado/python-binance.git
-bitmex
 pandas
 tqdm
-sqlalchemy
-psycopg2
-matplotlib
-scikit-learn
-backtrader
-TA-Lib
-statsmodels
-ccxt
-pyrenko
+git+git://github.com/manahl/arctic.git
+dnspython

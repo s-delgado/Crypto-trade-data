@@ -1,10 +1,9 @@
 import backtrader as bt
-from backtrader_functions import EWMAC, Cap, PriceChange, CommInfoFractional, PositionObserver, ForecastScalers
+from backtrader_strategies.backtrader_functions import EWMAC, Cap, PriceChange, CommInfoFractional, PositionObserver, ForecastScalers
 import pandas as pd
 import numpy as np
 from functions import get_candles, load_csv_candles, get_scalars, printTradeAnalysis
 import math
-from datetime import datetime
 
 
 # Create a Stratey
@@ -180,7 +179,7 @@ if __name__ == '__main__':
     min_contract_size = 0.001
 
     # Forecast weights
-    fw = np.array([[0.42, 0.16, 0.42]])
+    fw = np.array([[0, 0, 1]])
 
     # Forecast diversification multiplier
     corr = np.array([[1, 0.9, 0.6], [0.9, 1, 0.9], [0.6, 0.9, 1]])

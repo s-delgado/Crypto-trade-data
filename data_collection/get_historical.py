@@ -119,47 +119,42 @@ def get_all_bitmex(symbol, kline_size, save = False):
     print('All caught up..!')
     return data_df
 
-
-
-
-
 ### Get exchange data
-# tickers = binance_client.get_all_tickers()
-# symbols = []
-# # wanted = ['EUR', 'USD', 'BTC', 'ETH', 'USDT']
-# wanted = ['BTCUSDT']
-# for t in tickers:
-#     symbol = t['symbol']
-#     if any(w in symbol for w in wanted):
-#         symbols.append(symbol)
-#
-# kline_size = '1m'
-# for symbol in tqdm(symbols):
-#     filename = 'data/candles/%s-%s-data.csv.zip' % (symbol, kline_size)
-#     if os.path.isfile(filename):
-#         continue
-#     get_all_binance(symbol, kline_size, save=True)
-
-
-
-### Get futures data
+tickers = binance_client.get_all_tickers()
+symbols = []
 # wanted = ['EUR', 'USD', 'BTC', 'ETH', 'USDT']
 wanted = ['BTCUSDT']
-futures_info = binance_client.futures_exchange_info()
-sym_info = futures_info['symbols']
-symbols = []
-
-for symbol in sym_info:
-    symbol = symbol['symbol']
+for t in tickers:
+    symbol = t['symbol']
     if any(w in symbol for w in wanted):
         symbols.append(symbol)
 
 kline_size = '1m'
 for symbol in tqdm(symbols):
-    filename = 'data/candles/%s-%s-futures-data.csv.zip' % (symbol, kline_size)
-    if os.path.isfile(filename):
-        continue
-    get_all_binance_futures(symbol, kline_size, save=True)
+    filename = 'data/candles/%s-%s-data.csv.zip' % (symbol, kline_size)
+    # if os.path.isfile(filename):
+    #     continue
+    get_all_binance(symbol, kline_size, save=True)
+
+# if __name__ == '__main__':
+#     ### Get futures data
+#     # wanted = ['EUR', 'USD', 'BTC', 'ETH', 'USDT']
+#     wanted = ['BTCUSDT']
+#     futures_info = binance_client.futures_exchange_info()
+#     sym_info = futures_info['symbols']
+#     symbols = []
+#
+#     for symbol in sym_info:
+#         symbol = symbol['symbol']
+#         if any(w in symbol for w in wanted):
+#             symbols.append(symbol)
+#
+#     kline_size = '1m'
+#     for symbol in tqdm(symbols):
+#         filename = 'data/candles/%s-%s-futures-data.csv.zip' % (symbol, kline_size)
+#         if os.path.isfile(filename):
+#             continue
+#         get_all_binance_futures(symbol, kline_size, save=True)
 
 
-# df = pd.read_csv('data/candles/BTCUSDT-1m-futures-data.csv.zip')
+    # df = pd.read_csv('data/candles/BTCUSDT-1m-futures-data.csv.zip')

@@ -1,7 +1,6 @@
 import backtrader as bt
-from backtrader_functions import GenericCSV, EWMAC, PriceChange
 import pandas as pd
-import numpy as np
+from functions import load_csv_candles
 
 
 # Create a Stratey
@@ -120,13 +119,17 @@ class Renko(bt.Strategy):
 
 
 if __name__ == '__main__':
+    filename = 'data/BTCUSDT.csv'
+    df = load_csv_candles(filename)
+    df = df[df.index >= '2020-01-01']
+
     cerebro = bt.Cerebro()
 
     cerebro.addstrategy(Renko)
-    data0 = GenericCSV(dataname='data/BTCUSDT.csv')
-    data0.addfilter(bt.filters.Renko, size=20, align=10)
+    data = bt.feeds.PandasData(dataname=df, timeframe=bt.TimeFrame.Minutes, compression=60)
+    data.addfilter(bt.filters.Renko, size=50, align=10)
     # cerebro.resampledata(data0, timeframe=bt.TimeFrame.Minutes, compression=60)
-    cerebro.adddata(data0)
+    cerebro.adddata(data)
     cerebro.broker.set_cash(100000)
     cerebro.broker.setcommission(commission=0.04 / 100)
     # cerebro.addwriter(bt.WriterFile, csv=True, out='logs.csv')
