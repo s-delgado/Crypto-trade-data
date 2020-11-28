@@ -41,14 +41,16 @@ class AdaptiveDPCM(object):
         self.signal = signal
 
     def get_levels(self, step_size):
-        levels = np.arange(start=0, stop=self.num_levels * step_size + 1, step=step_size)
+        levels = np.linspace(start=0, stop=self.num_levels * step_size, num=self.num_levels+1)
         levels = np.unique(np.hstack([levels, -levels]))
         return levels
 
     def encode(self):
         # History
         symbols = np.zeros(len(self.signal), dtype=np.uint)
-        step_sizes = np.zeros(len(self.signal), dtype=np.uint)
+        differences = np.zeros(len(self.signal))
+        qdifferences = np.zeros(len(self.signal))
+        step_sizes = np.zeros(len(self.signal))
 
         # Initial parameters
         prediction = self.signal[0]
@@ -58,15 +60,20 @@ class AdaptiveDPCM(object):
 
         for i, sig in enumerate(self.signal[1:]):
             diff = sig - prediction     # current input - last prediction
+            differences[i] = diff
             abs_error = np.abs(levels - diff)
             diff_index = np.argmin(abs_error)
-            prediction = prediction + self.levels[diff_index]   # previous prediction + current quantized difference
+            prediction = prediction + levels[diff_index]   # previous prediction + current quantized difference
             symbols[i] = diff_index
+            qdiff = levels[diff_index]
+            qdifferences[i] = qdiff
             step_sizes[i] = step_size   # record current step size
+            if diff_index > 4:
+                print('')
             step_size = step_size * self.multipliers[diff_index]    # update step_size
             levels = self.get_levels(step_size)     # update levels
 
-        return symbols, step_sizes
+        return symbols, step_sizes, differences, qdifferences
 
     def decode(self, symbols):
         signal = np.zeros(len(symbols), dtype=np.double)
