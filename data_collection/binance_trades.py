@@ -1,23 +1,18 @@
 import requests
-import json
 import time
-import sys
 import pandas as pd
 import calendar
 from datetime import datetime, timedelta
-from binance.client import Client
-from keys import import keys
-
-binance_client = Client(api_key=keys['binance']['apiKey'], api_secret=keys['binance']['secret'])
 
 
 def get_unix_ms_from_date(date):
+    # Expects a datetime object
     return int(calendar.timegm(date.timetuple()) * 1000 + date.microsecond / 1000)
 
 
-def get_first_trade_id_from_start_date(symbol, from_date):
+def get_first_trade_id_from_start_date(api_url, symbol, from_date):
     new_end_date = from_date + timedelta(seconds=60)
-    r = requests.get('https://api.binance.com/api/v3/aggTrades',
+    r = requests.get(api_url,
                      params={
                          "symbol": symbol,
                          "startTime": get_unix_ms_from_date(from_date),
@@ -28,7 +23,7 @@ def get_first_trade_id_from_start_date(symbol, from_date):
         print('somethings wrong!', r.status_code)
         print('sleeping for 10s... will retry')
         time.sleep(10)
-        get_first_trade_id_from_start_date(symbol, from_date)
+        get_first_trade_id_from_start_date(api_url, symbol, from_date)
 
     response = r.json()
     if len(response) > 0:
@@ -37,8 +32,8 @@ def get_first_trade_id_from_start_date(symbol, from_date):
         raise Exception('no trades found')
 
 
-def get_trades(symbol, from_id):
-    r = requests.get("https://api.binance.com/api/v3/aggTrades",
+def get_trades(api_url, symbol, from_id):
+    r = requests.get(api_url,
                      params={
                          "symbol": symbol,
                          "limit": 1000,
@@ -49,7 +44,7 @@ def get_trades(symbol, from_id):
         print('somethings wrong!', r.status_code)
         print('sleeping for 10s... will retry')
         time.sleep(10)
-        binance_client.get_historical_trades(symbol, from_id)
+        get_trades(api_url, symbol, from_id)
 
     return r.json()
 
@@ -58,14 +53,14 @@ def trim(df, to_date):
     return df[df['T'] <= get_unix_ms_from_date(to_date)]
 
 
-def fetch_binance_trades(symbol, from_date, to_date):
-    from_id = get_first_trade_id_from_start_date(symbol, from_date)
+def fetch_binance_trades(api_url, symbol, from_date, to_date):
+    from_id = get_first_trade_id_from_start_date(api_url, symbol, from_date)
     current_time = 0
     df = pd.DataFrame()
 
     while current_time < get_unix_ms_from_date(to_date):
         try:
-            trades = get_trades(symbol, from_id)
+            trades = get_trades(api_url, symbol, from_id)
 
             from_id = trades[-1]['a']
             current_time = trades[-1]['T']
@@ -83,21 +78,24 @@ def fetch_binance_trades(symbol, from_date, to_date):
 
     df.drop_duplicates(subset='a', inplace=True)
     df = trim(df, to_date)
-
-    filename = f'binance__{symbol}__trades__from__{sys.argv[2].replace("/", "_")}__to__{sys.argv[3].replace("/", "_")}.csv'
-    df.to_csv(filename)
-
-    print(f'{filename} file created!')
+    print(f'binance__{symbol}__trades__from__{from_date.strftime("%d/%m/%Y %H:%M:%S")}__to__{to_date.strftime("%d/%m/%Y %H:%M:%S")}')
+    return df
 
 
-if __name__ == "__main__":
-    if len(sys.argv) < 4:
-        raise Exception('arguments format: <symbol> <start_date> <end_date>')
-        exit()
+def trade_verifier(df):
+    values = df.to_numpy()
 
-    symbol = sys.argv[1]
+    last_id = values[0][0]
 
-    from_date = datetime.strptime(sys.argv[2], '%m/%d/%Y')
-    to_date = datetime.strptime(sys.argv[3], '%m/%d/%Y') + timedelta(days=1) - timedelta(microseconds=1)
+    for row in values[1:]:
+        trade_id = row[0]
+        if last_id + 1 != trade_id:
+            print('last_id', last_id)
+            print('trade_id', trade_id)
+            print('inconsistent data')
+            return False
+        last_id = trade_id
 
-    fetch_binance_trades(symbol, from_date, to_date)
+    print('data is OK!')
+    return True
+

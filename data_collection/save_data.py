@@ -1,51 +1,67 @@
 from arctic import Arctic
 import arctic
+from datetime import datetime, timedelta
+from data_collection.binance_trades import fetch_binance_trades, trade_verifier
 import pandas as pd
-from data_collection.functions import get_all_binance_futures
-from binance.client import Client
-import os
 
-os.environ['db_url'] = 'mongodb+srv://admin:FjSNbgv0wQEHDcrecuOIg30PFE9j@gg-cluster.ldnwj.mongodb.net/GG-Cluster?retryWrites=true&w=majority'
 
-binance_client = Client(api_key=os.environ['binance_apikey'], api_secret=os.environ['binance_secret'])
+def store_trade_data(market, symbol, start_date, end_date):
 
-# Connect to MONGODB
-store = Arctic(os.environ['db_url'])
+    if market == 'futures':
+        api_url = 'https://fapi.binance.com/fapi/v1/aggTrades'  # Binance futures
+        lib_name = 'binance_futures'
+    else:
+        api_url = 'https://api.binance.com/api/v3/aggTrades'  # Binance exchange
+        lib_name = 'binance_exchange'
 
-# Access the library
-try:
-    library = store['binance_futures']
-except arctic.exceptions.LibraryNotFoundException:
-    print('Library not found, initializing library')
-    store.initialize_library('binance_futures', lib_type=arctic.VERSION_STORE)
-    library = store['binance_futures']
+    # Connect to MONGODB
+    store = Arctic('mongodb://127.0.0.1:27017')
 
-# Load some data
-symbols = ['BTCUSDT']
+    # Access the library
+    try:
+        library = store[lib_name]
+    except arctic.exceptions.LibraryNotFoundException:
+        print('Library not found, initializing library')
+        store.initialize_library(lib_name, lib_type=arctic.VERSION_STORE)
+        library = store[lib_name]
 
-# split for loop into different threads
-for symbol in symbols:
+    # Check for existing data
     if library.has_symbol(symbol):
         item = library.read(symbol)
         df = item.data
-    else:
-        df = None
+        last_timestamp = df.index.max().to_pydatetime()
 
-    df = get_all_binance_futures(df, 'BTCUSDT', '1m', binance_client)
-    library.append('BTCUSDT', df, metadata={'source': 'binance'}, prune_previous_version=True, upsert=True)
+    # Starting dates
+    from_date = start_date
+    to_date = start_date + timedelta(days=1)
+
+    # Correcting for existing data
+    if last_timestamp > from_date:
+        from_date = last_timestamp + timedelta(milliseconds=1)
+        to_date = from_date + timedelta(days=1)
+
+    # Main loop
+    while to_date <= end_date:
+        df = fetch_binance_trades(api_url, symbol, from_date, to_date)
+        if trade_verifier(df):
+            df['datetime'] = pd.to_datetime(df['T'], unit='ms')
+            df.set_index('datetime', inplace=True)
+            df.drop(columns=['T'], inplace=True)
+            df.columns = ['aggtradeID', 'price', 'quantity', 'first_tradeID', 'last_tradeID', 'maker']
+            library.append(symbol, df, metadata={'source': 'binance'}, prune_previous_version=True, upsert=True)
+
+            # Update to new interval
+            from_date += timedelta(days=1)
+            to_date += timedelta(days=1)
+        else:
+            break
 
 
-
-
-# Load old data
-# df = pd.read_csv('data/candles/BTCUSDT-1m-futures-data.csv.zip')
-# df['timestamp'] = pd.to_datetime(df.timestamp)
-# df.set_index('timestamp', inplace=True)
-# # library.delete('BTCUSDT')
-# library.write('BTCUSDT', df, metadata={'source': 'binance'})
-
-# store.delete_library('binance_futures')
-# store.list_libraries()
-#
-# library.read_audit_log('BTCUSDT')
+if __name__ == '__main__':
+    # Initial parameters
+    market = 'futures'
+    symbol = 'BTCUSDT'
+    start_date = datetime(2020, 1, 1)
+    end_date = datetime.today().date() - timedelta(microseconds=1)
+    store_trade_data(market, symbol, start_date, end_date)
 
