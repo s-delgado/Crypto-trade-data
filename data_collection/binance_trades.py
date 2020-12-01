@@ -62,11 +62,11 @@ def fetch_binance_trades(api_url, symbol, from_date, to_date):
         try:
             trades = get_trades(api_url, symbol, from_id)
 
-            from_id = trades[-1]['a']
-            current_time = trades[-1]['T']
-
+            current_time = trades[0]['T']
             print(
                 f'fetched {len(trades)} trades from id {from_id} @ {datetime.utcfromtimestamp(current_time / 1000.0)}')
+
+            from_id = trades[-1]['a'] + 1
 
             df = pd.concat([df, pd.DataFrame(trades)])
 
@@ -82,20 +82,31 @@ def fetch_binance_trades(api_url, symbol, from_date, to_date):
     return df
 
 
-def trade_verifier(df):
+def trade_verifier(df, symbol, market):
     values = df.to_numpy()
-
     last_id = values[0][0]
+    flag = False
+    e = pd.DataFrame(columns=['last_id', 'trade_id'])
 
     for row in values[1:]:
         trade_id = row[0]
         if last_id + 1 != trade_id:
             print('last_id', last_id)
             print('trade_id', trade_id)
-            print('inconsistent data')
-            return False
+            flag = True
+            e = pd.concat([e, pd.DataFrame({'last_id': last_id, 'trade_id': trade_id}, index=[0])])
         last_id = trade_id
+    if flag:
+        print('inconsistent data!')
+        # Save errors
+        try:
+            errors = pd.read_csv(symbol+'__'+market+'__errors.csv')
+            errors = pd.concat([errors, e])
+            errors.to_csv(symbol + '__' + market + '__errors.csv', index=False)
+        except Exception:
+            e.to_csv(symbol+'__'+market+'__errors.csv', index=False)
 
-    print('data is OK!')
-    return True
+    else:
+        print('data is OK!')
+
 

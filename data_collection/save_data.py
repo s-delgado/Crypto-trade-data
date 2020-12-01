@@ -3,6 +3,7 @@ import arctic
 from datetime import datetime, timedelta
 from data_collection.binance_trades import fetch_binance_trades, trade_verifier
 import pandas as pd
+import sys
 
 
 def store_trade_data(market, symbol, start_date, end_date):
@@ -27,7 +28,7 @@ def store_trade_data(market, symbol, start_date, end_date):
 
     # Check for existing data
     if library.has_symbol(symbol):
-        item = library.read(symbol)
+        item = library.read(symbol, date_range=arctic.date.DateRange(start_date, None))  # limit by date
         df = item.data
         last_timestamp = df.index.max().to_pydatetime()
 
@@ -43,25 +44,30 @@ def store_trade_data(market, symbol, start_date, end_date):
     # Main loop
     while to_date <= end_date:
         df = fetch_binance_trades(api_url, symbol, from_date, to_date)
-        if trade_verifier(df):
-            df['datetime'] = pd.to_datetime(df['T'], unit='ms')
-            df.set_index('datetime', inplace=True)
-            df.drop(columns=['T'], inplace=True)
-            df.columns = ['aggtradeID', 'price', 'quantity', 'first_tradeID', 'last_tradeID', 'maker']
-            library.append(symbol, df, metadata={'source': 'binance'}, prune_previous_version=True, upsert=True)
+        trade_verifier(df, symbol, market)
+        df['datetime'] = pd.to_datetime(df['T'], unit='ms')
+        df.set_index('datetime', inplace=True)
+        df.drop(columns=['T'], inplace=True)
+        df.columns = ['aggtradeID', 'price', 'quantity', 'first_tradeID', 'last_tradeID', 'maker']
+        library.append(symbol, df, metadata={'source': 'binance'}, prune_previous_version=True, upsert=True)
 
-            # Update to new interval
-            from_date += timedelta(days=1)
-            to_date += timedelta(days=1)
-        else:
-            break
+        # Update to new interval
+        from_date += timedelta(days=1)
+        to_date += timedelta(days=1)
 
 
 if __name__ == '__main__':
-    # Initial parameters
-    market = 'futures'
-    symbol = 'BTCUSDT'
-    start_date = datetime(2020, 1, 1)
-    end_date = datetime.today().date() - timedelta(microseconds=1)
+    if len(sys.argv) < 4:
+        raise Exception('arguments format: <market> <symbol> <start_date>')
+        exit()
+    market = sys.argv[1]
+    symbol = sys.argv[2]
+    start_date = datetime.strptime(sys.argv[3], '%d/%m/%Y')
+    #
+    # market = 'futures'
+    # symbol = 'BTCUSDT'
+    # start_date = datetime(2020, 4, 15)
+
+    end_date = datetime.today().replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(microseconds=1)
     store_trade_data(market, symbol, start_date, end_date)
 
