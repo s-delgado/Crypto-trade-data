@@ -28,6 +28,20 @@ def get_candles(DF, freq):
     return candles
 
 
+def get_candles_trades(DF, freq):
+    df = DF.copy()
+    groups = df.groupby(pd.Grouper(freq=freq))
+    open = groups.price.first()
+    high = groups.price.max()
+    low = groups.price.min()
+    close = groups.price.last()
+    volume = groups.quantity.sum()
+
+    candles = pd.concat([open, high, low, close, volume], axis=1)
+    candles.columns = ['open', 'high', 'low', 'close', 'volume']
+    return candles
+
+
 def cap_forecast(xrow, capmin, capmax):
     """
     Cap forecasts.
