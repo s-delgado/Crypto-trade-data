@@ -13,3 +13,11 @@ pytz==2020.1
 requests==2.23.0
 six==1.14.0
 urllib3==1.25.9
+mplfinance
+mpld3
+tqdm
+statsmodels
+scipy
+scikit-learn
+ipykernel
+seaborn

@@ -6,10 +6,10 @@ from functions import load_csv_candles
 # Create a Stratey
 class Renko(bt.Strategy):
 
-    params = (('slow_period', 128*4),
-              ('fast_period', 128),
-              ('std_lookback', 36),
-              ('ewm_std', True))
+    # params = (('slow_period', 128*4),
+    #           ('fast_period', 128),
+    #           ('std_lookback', 36),
+    #           ('ewm_std', True))
 
     def log(self, txt, dt=None):
         ''' Logging function fot this strategy'''
@@ -18,16 +18,16 @@ class Renko(bt.Strategy):
 
     def __init__(self):
         # Keep a reference to the "close" line in the data[0] dataseries
-        self.dataclose = self.datas[0].close
-        self.record = pd.DataFrame()
+        self.close = self.datas[0].close
+        # self.record = pd.DataFrame()
 
         # To keep track of pending orders and buy price/commission
         self.order = None
         self.start_trade = None
         self.end_trade = None
 
-        self.slow = bt.indicators.ExponentialMovingAverage(period=self.params.slow_period)
-        self.fast = bt.indicators.ExponentialMovingAverage(period=self.params.fast_period)
+        # self.slow = bt.indicators.ExponentialMovingAverage(period=self.params.slow_period)
+        # self.fast = bt.indicators.ExponentialMovingAverage(period=self.params.fast_period)
         # crossover = self.fast - self.slow
         # self.crossover = bt.LinePlotterIndicator(crossover, name='crossover', subplot=False)
         # returns = PriceChange(period=1, plot=False)
@@ -83,12 +83,12 @@ class Renko(bt.Strategy):
     def next(self):
         pass
         # Simply log the closing price of the series from the reference
-        # self.log('Position: %.0f, Close: %.2f, Fast: %.2f, Slow: %.2f, Forecast: %.2f' % (self.position.size,
-        #                                                                                   self.dataclose[0],
-        #                                                                                   self.fast[0],
-        #                                                                                   self.slow[0],
-        #                                                                                   self.forecast[0],
-        #                                                                                      ))
+        self.log('Position: %.0f, Close: %.2f, Fast: %.2f, Slow: %.2f, Forecast: %.2f' % (self.position.size,
+                                                                                          self.dataclose[0],
+                                                                                          self.fast[0],
+                                                                                          self.slow[0],
+                                                                                          self.forecast[0],
+                                                                                             ))
         # record = pd.DataFrame(np.array([[self.data.datetime.datetime(),
         #                                  self.position.size,
         #                                  self.dataclose[0],
@@ -99,35 +99,38 @@ class Renko(bt.Strategy):
         #
         # self.record = self.record.append(record)
 
-        if not self.position:
+        # if not self.position:
+        #
+        #     if self.fast > self.slow and self.fast[-1] <= self.slow[-1]:
+        #         self.order = self.buy()
+        #         self.log('BUY CREATE, %.2f' % self.order.created.price)
+        #
+        #     if self.fast < self.slow and self.fast[-1] >= self.slow[-1]:
+        #         self.order = self.sell()
+        #         self.log('SELL CREATE, %.2f' % self.order.created.price)
 
-            if self.fast > self.slow and self.fast[-1] <= self.slow[-1]:
-                self.order = self.buy()
-                self.log('BUY CREATE, %.2f' % self.order.created.price)
-
-            if self.fast < self.slow and self.fast[-1] >= self.slow[-1]:
-                self.order = self.sell()
-                self.log('SELL CREATE, %.2f' % self.order.created.price)
-
-        if self.position.size > 0:
-            if self.fast < self.slow:
-                self.order = self.sell(size=2)
-
-        if self.position.size < 0:
-            if self.fast > self.slow:
-                self.order = self.buy(size=2)
+        # if self.position.size > 0:
+        #     if self.fast < self.slow:
+        #         self.order = self.sell(size=2)
+        #
+        # if self.position.size < 0:
+        #     if self.fast > self.slow:
+        #         self.order = self.buy(size=2)
 
 
 if __name__ == '__main__':
-    filename = 'data/BTCUSDT.csv'
-    df = load_csv_candles(filename)
-    df = df[df.index >= '2020-01-01']
+    filename = 'bars.csv'
+    # df = load_csv_candles(filename)
+    df = pd.read_csv(filename)
+    df['datetime'] = pd.to_datetime(df.datetime)
+    df.set_index('datetime', inplace=True)
+    # df = df[df.index >= '2020-01-01']
 
     cerebro = bt.Cerebro()
 
-    cerebro.addstrategy(Renko)
-    data = bt.feeds.PandasData(dataname=df, timeframe=bt.TimeFrame.Minutes, compression=60)
-    data.addfilter(bt.filters.Renko, size=50, align=10)
+    # cerebro.addstrategy(Renko)
+    data = bt.feeds.PandasData(dataname=df)
+    data.addfilter(bt.filters.Renko, size=50)
     # cerebro.resampledata(data0, timeframe=bt.TimeFrame.Minutes, compression=60)
     cerebro.adddata(data)
     cerebro.broker.set_cash(100000)
@@ -142,8 +145,6 @@ if __name__ == '__main__':
 
     # Print out the final result
     print('Final Portfolio Value: %.2f' % cerebro.broker.getvalue())
-    # print(10 / np.nanmean(cerebro.runningstrats[0].forecast.array))
-
     cerebro.plot(style='candles')
 
 

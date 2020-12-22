@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import arctic
 
 
 def load_csv_candles(filename):
@@ -143,3 +144,96 @@ def printTradeAnalysis(analyzer):
     print("Trade Analysis Results:")
     for row in print_list:
         print(row_format.format('',*row))
+
+def generate_tickbars(df, frequency=1000):
+    ticks = df[['dt', 'price', 'quantity']].values
+    times = ticks[:,0]
+    prices = ticks[:,1]
+    volumes = ticks[:,2]
+    res = np.zeros(shape=(len(range(frequency, len(prices), frequency)), 6))
+    it = 0
+    for i in range(frequency, len(prices), frequency):
+        res[it][0] = times[i-1]                        # time
+        res[it][1] = prices[i-frequency]               # open
+        res[it][2] = np.max(prices[i-frequency:i])     # high
+        res[it][3] = np.min(prices[i-frequency:i])     # low
+        res[it][4] = prices[i-1]                       # close
+        res[it][5] = np.sum(volumes[i-frequency:i])    # volume
+        it += 1
+    bars = pd.DataFrame(res,
+                        columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+    bars.set_index(pd.to_datetime(bars.timestamp, unit='us'), inplace=True)
+    bars.drop(columns=['timestamp'], inplace=True)
+    return bars
+
+def generate_volumebars(df, frequency=10):
+    trades = df[['dt', 'price', 'quantity']].values
+    times = trades[:, 0]
+    prices = trades[:, 1]
+    volumes = trades[:, 2]
+    ans = np.zeros(shape=(len(prices), 6))
+    candle_counter = 0
+    vol = 0
+    lasti = 0
+    for i in range(len(prices)):
+        vol += volumes[i]
+        if vol >= frequency:
+            ans[candle_counter][0] = times[i]                          # time
+            ans[candle_counter][1] = prices[lasti]                     # open
+            ans[candle_counter][2] = np.max(prices[lasti:i+1])         # high
+            ans[candle_counter][3] = np.min(prices[lasti:i+1])         # low
+            ans[candle_counter][4] = prices[i]                         # close
+            ans[candle_counter][5] = np.sum(volumes[lasti:i+1])        # volume
+            candle_counter += 1
+            lasti = i+1
+            vol = 0
+    bars = pd.DataFrame(ans[:candle_counter],
+                        columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+    bars.set_index(pd.to_datetime(bars.timestamp, unit='us'), inplace=True)
+    bars.drop(columns=['timestamp'], inplace=True)
+    return bars
+
+
+def generate_dollarbars(df, frequency=1000):
+    trades = df[['dt', 'price', 'quantity']].values
+    times = trades[:,0]
+    prices = trades[:,1]
+    volumes = trades[:,2]
+    dollars = prices * volumes
+    ans = np.zeros(shape=(len(prices), 6))
+    candle_counter = 0
+    doll = 0
+    lasti = 0
+    for i in range(len(prices)):
+        doll += dollars[i]
+        if doll >= frequency:
+            ans[candle_counter][0] = times[i]                          # time
+            ans[candle_counter][1] = prices[lasti]                     # open
+            ans[candle_counter][2] = np.max(prices[lasti:i+1])         # high
+            ans[candle_counter][3] = np.min(prices[lasti:i+1])         # low
+            ans[candle_counter][4] = prices[i]                         # close
+            ans[candle_counter][5] = np.sum(volumes[lasti:i+1])        # volume
+            candle_counter += 1
+            lasti = i+1
+            doll = 0
+    bars = pd.DataFrame(ans[:candle_counter],
+                        columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+    bars.set_index(pd.to_datetime(bars.timestamp, unit='us'), inplace=True)
+    bars.drop(columns=['timestamp'], inplace=True)
+    return bars
+
+def fix_timestamps(df):
+    df['cc'] = df.groupby('dt').cumcount()
+    df['dt'] = df['dt']*1000 + df.cc
+    df.drop(columns = ['cc'], inplace=True)
+    return df
+
+def get_tick_data(exchange, symbol, start_date, end_date):
+    store = arctic.Arctic('mongodb://127.0.0.1:27017')
+    library = store[exchange]
+    item = library.read(symbol, date_range=arctic.date.DateRange(start_date, end_date))  # limit by date
+    df = item.data
+    df['price'] = df.price.astype(float)
+    df['quantity'] = df.quantity.astype(float)
+    df['dt'] = (np.round(df.index.astype(np.int64) / int(1e6), 0)).astype(int)
+    return df
